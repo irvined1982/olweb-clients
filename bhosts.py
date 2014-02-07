@@ -19,7 +19,6 @@ import argparse
 from olwclient import *
 
 
-
 def print_long():
     for host in Host.get_hosts_by_names(connection, args.hostnames):
         print "HOST  %s" % host.host_name
@@ -69,9 +68,6 @@ def print_wide():
     print "HOST_NAME          STATUS       JL/U    MAX  NJOBS    RUN  SSUSP  USUSP    RSV"
     for host in Host.get_hosts_by_names(connection, args.hostnames):
         print "%-18s %-12s %-7s %-4s %-8s %-4s %-6s %-8s %-4s" % (host.host_name, ",".join([s.friendly for s in host.statuses]), "-" if host.max_slots_per_user == 2147483647 else host.max_slots_per_user, host.max_slots, host.total_slots, host.num_running_slots, host.num_system_suspended_slots, host.num_user_suspended_slots, host.num_reserved_slots)
-
-
-
 
 
 parser = argparse.ArgumentParser(description='Displays information about hosts')
