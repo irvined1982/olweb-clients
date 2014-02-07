@@ -1,21 +1,28 @@
 #!/usr/bin/env python
+# Copyright 2014 David Irvine
+#
+# This file is part of olwclients
+#
+# olwclients is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or (at
+# your option) any later version.
+#
+# olwclients is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with olwclients. If not, see <http://www.gnu.org/licenses/>.
+
 import argparse
 from olwclient import *
 import socket
 
 
-def _get_hosts(host_names):
-    if len(host_names) == 1 and host_names[0] == "all":
-        hosts = Host.get_host_list(connection)
-    elif len(host_names) == 0:
-        hosts = [Host(host_name=socket.gethostname())]
-    else:
-        hosts = [Host(host_name=host_name) for host_name in host_names]
-    return hosts
-
-
 def hclose(args):
-    for host in _get_hosts(args.host_names):
+    for host in Host.get_hosts_by_names(connection, args.host_names):
         try:
             host.close()
             print "Olosed host: %s" % host.host_name
@@ -23,7 +30,7 @@ def hclose(args):
             print "Unable to close host: %s: %s" % (host.host_name, e.message)
 
 def hopen(args):
-    for host in _get_hosts(args.host_names):
+    for host in Host.get_hosts_by_names(connection, args.host_names):
         try:
             host.close()
             print "Opened host: %s" % host.host_name

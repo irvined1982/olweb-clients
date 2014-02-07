@@ -1,4 +1,21 @@
 #!/usr/bin/env python
+# Copyright 2014 David Irvine
+#
+# This file is part of olwclients
+#
+# olwclients is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or (at
+# your option) any later version.
+#
+# olwclients is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with olwclients. If not, see <http://www.gnu.org/licenses/>.
+import socket
 import json
 import urllib2
 import cookielib
@@ -103,6 +120,19 @@ class OpenLavaObject(object):
 
 
 class Host(OpenLavaObject):
+
+    @classmethod
+    def get_hosts_by_names(cls, connection, host_names):
+        if len(host_names) == 1 and host_names[0] == "all":
+            hosts = cls.get_host_list(connection)
+        elif len(host_names) == 0:
+            hosts = [cls(connection, host_name=socket.gethostname())]
+        else:
+            hosts = [cls(connection, host_name=host_name) for host_name in host_names]
+        return hosts
+
+
+
     @classmethod
     def get_host_list(cls, connection):
         url=connection.url + "/hosts"
@@ -136,6 +166,9 @@ class Host(OpenLavaObject):
         OpenLavaObject.__init__(self, connection, data=data)
         self.resources = [Resource(self._connection, data=res) for res in self.resources]
         self.statuses = [Status(self._connection, data=status) for status in self.statuses]
+        self.load_information = LoadInformation(self._connection, data=self.load_information)
+        self.load_information.values = [LoadValueList(self._connection, data=l) for l in self.load_information.values]
+
 
     def jobs(self):
         raise NotImplementedError
@@ -168,6 +201,10 @@ class Host(OpenLavaObject):
 class NoSuchObjectError(Exception):
     pass
 
+class LoadInformation(OpenLavaObject):
+    pass
+class LoadValueList(OpenLavaObject):
+    pass
 
 class RemoteException(Exception):
     def __init__(self, data):
