@@ -117,7 +117,23 @@ class OpenLavaObject(object):
                 raise ValueError("Must be a dict")
             for k, v in data.iteritems():
                 setattr(self, k, v)
-
+    def _exec_remote(self, url):
+        url = self._connection.url + url
+        req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
+        try:
+            data = self._connection.open(req).read()
+            data = json.loads(data)
+            if not isinstance(data, dict):
+                raise ValueError("Invalid data returned")
+            if data['status'] == "Fail":
+                raise RemoteException(data)
+            else:
+                return data
+        except urllib2.HTTPError as e:
+            if e.code==404:
+                raise NoSuchObjectError(url)
+            else:
+                raise
 
 class Host(OpenLavaObject):
 
@@ -156,7 +172,7 @@ class Host(OpenLavaObject):
                 data = json.loads(data)
             except urllib2.HTTPError as e:
                 if e.code == 404:
-                    raise ValueError("No such host: %s" % host_name)
+                    raise NoSuchObjectError("No such host: %s" % host_name)
                 else:
                     raise
         if not isinstance(data, dict):
@@ -179,23 +195,7 @@ class Host(OpenLavaObject):
     def open(self):
         self._exec_remote("/hosts/%s/open" % self.host_name)
 
-    def _exec_remote(self, url):
-        url = self._connection.url + url
-        req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
-        try:
-            data = self._connection.open(req).read()
-            data = json.loads(data)
-            if not isinstance(data, dict):
-                raise ValueError("Invalid data returned")
-            if data['status'] == "Fail":
-                raise RemoteException(data)
-            else:
-                return data
-        except urllib2.HTTPError as e:
-            if e.code==404:
-                raise NoSuchObjectError(url)
-            else:
-                raise
+
 
 
 class NoSuchObjectError(Exception):
@@ -220,6 +220,69 @@ class Status(OpenLavaObject):
 class Resource(OpenLavaObject):
     """Resource"""
     pass
+
+
+class Queue(OpenLavaObject):
+    @classmethod
+    def get_queues_by_names(cls, connection, queue_names):
+        if len(queue_names) == 1 and queue_names[0] == "all":
+            queues = cls.get_queue_list(connection)
+        elif len(queue_names) == 0:
+            raise NotImplementedError("Must check cluster for default queue")
+            #queues = [cls(connection, queue_name=socket.gethostname())]
+        else:
+            queues = [cls(connection, queue_name=queue_name) for queue_name in queue_names]
+        return queues
+
+    @classmethod
+    def get_queue_list(cls, connection):
+        url=connection.url + "/queues/"
+        request = urllib2.Request(url,None, {'Content-Type': 'application/json'})
+        try:
+            data = connection.open(request).read()
+            data = json.loads(data)
+            if not isinstance(data, list):
+                print "Got strange data back"
+                data=[]
+            return [cls(connection, data=i) for i in data]
+        except:
+            raise
+
+    def __init__(self, connection,  queue_name=None, data=None):
+        if queue_name:
+            url = connection.url + "/queues/%s" % queue_name
+            req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
+            try:
+                data = connection.open(req).read()
+                data = json.loads(data)
+            except urllib2.HTTPError as e:
+                if e.code == 404:
+                    raise NoSuchObjectError("No such queue: %s" % queue_name)
+                else:
+                    raise
+        if not isinstance(data, dict):
+            raise ValueError("Data must be a dict")
+        if data['type'] != "Queue":
+            raise ValueError("data is not of type Queue")
+        OpenLavaObject.__init__(self, connection, data=data)
+        self.attributes = [Status(self._connection, data=attr) for attr in self.attributes]
+        self.statuses = [Status(self._connection, data=status) for status in self.statuses]
+        # runtime limits
+
+    def jobs(self):
+        raise NotImplementedError
+
+    def close(self):
+        self._exec_remote("/queues/%s/close" % self.name)
+
+    def open(self):
+        self._exec_remote("/queues/%s/open" % self.name)
+
+    def inactivate(self):
+        self._exec_remote("/queues/%s/inactivate" % self.name)
+
+    def activate(self):
+        self._exec_remote("/queues/%s/activate" % self.name)
 
 
 # class Job(OpenLavaObject):
