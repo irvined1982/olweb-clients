@@ -367,6 +367,14 @@ class Job(OpenLavaObject):
 
 
 class Queue(OpenLavaObject):
+    """Queue stuff
+
+.. py:attribute:: accept_interval
+
+Queue accept interval in seconds
+
+
+	"""
     @classmethod
     def get_queues_by_names(cls, connection, queue_names):
         """Return a list of Queue objects that match the given queue_names.
