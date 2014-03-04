@@ -19,6 +19,9 @@ import socket
 import json
 import urllib2
 import cookielib
+import urllib
+import datetime
+import re
 
 
 class AuthenticationError(Exception):
@@ -51,17 +54,17 @@ class OpenLavaConnection(object):
         :rtype:None
 
         """
-        self.username=args.username
-        self.password=args.password
-        self.url=args.url
-        self.url=self.url.rstrip("/")
+        self.username = args.username
+        self.password = args.password
+        self.url = args.url
+        self.url = self.url.rstrip("/")
 
         self._cookies = cookielib.LWPCookieJar()
         handlers = [
-                urllib2.HTTPHandler(),
-                urllib2.HTTPSHandler(),
-                urllib2.HTTPCookieProcessor(self._cookies)
-                ]
+            urllib2.HTTPHandler(),
+            urllib2.HTTPSHandler(),
+            urllib2.HTTPCookieProcessor(self._cookies)
+        ]
         self._opener = urllib2.build_opener(*handlers)
         self._opener.addheaders = [('HTTP_X_REQUESTED_WITH', 'XMLHttpRequest'), ('X-Requested-With', 'XMLHttpRequest')]
 
@@ -69,22 +72,22 @@ class OpenLavaConnection(object):
     def authenticated(self):
         """True if the connection is currently authenticated"""
         for c in self._cookies:
-            if c.name=='sessionid':
+            if c.name == 'sessionid':
                 return True
         return False
 
     def login(self):
         """Logs the user into the server"""
-        data={
-                'username':self.username,
-                'password':self.password,
-                }
-        data=json.dumps(data)
-        url=self.url + "/accounts/ajax_login"
+        data = {
+            'username': self.username,
+            'password': self.password,
+        }
+        data = json.dumps(data)
+        url = self.url + "/accounts/ajax_login"
         req = urllib2.Request(url, data, {'Content-Type': 'application/json'})
-        f=self._open(req)
+        f = self._open(req)
         f = urllib2.urlopen(req)
-        data= json.loads(f.read())
+        data = json.loads(f.read())
         f.close()
         if not self.authenticated:
             raise AuthenticationError(data['description'])
@@ -106,17 +109,15 @@ class OpenLavaConnection(object):
         return self._open(request)
 
 
-
-
-
 class OpenLavaObject(object):
     def __init__(self, connection, data=None):
-        self._connection=connection
+        self._connection = connection
         if json:
             if not isinstance(data, dict):
                 raise ValueError("Must be a dict")
             for k, v in data.iteritems():
                 setattr(self, k, v)
+
     def _exec_remote(self, url):
         url = self._connection.url + url
         req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
@@ -130,13 +131,13 @@ class OpenLavaObject(object):
             else:
                 return data
         except urllib2.HTTPError as e:
-            if e.code==404:
+            if e.code == 404:
                 raise NoSuchObjectError(url)
             else:
                 raise
 
-class Host(OpenLavaObject):
 
+class Host(OpenLavaObject):
     @classmethod
     def get_hosts_by_names(cls, connection, host_names):
         if len(host_names) == 1 and host_names[0] == "all":
@@ -148,22 +149,21 @@ class Host(OpenLavaObject):
         return hosts
 
 
-
     @classmethod
     def get_host_list(cls, connection):
-        url=connection.url + "/hosts"
-        request = urllib2.Request(url,None, {'Content-Type': 'application/json'})
+        url = connection.url + "/hosts"
+        request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
         try:
             data = connection.open(request).read()
             data = json.loads(data)
             if not isinstance(data, list):
                 print "Got strange data back"
-                data=[]
+                data = []
             return [Host(connection, data=i) for i in data]
         except:
             raise
 
-    def __init__(self, connection,  host_name=None, data=None):
+    def __init__(self, connection, host_name=None, data=None):
         if host_name:
             url = connection.url + "/hosts/%s?json=1" % host_name
             req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
@@ -196,15 +196,17 @@ class Host(OpenLavaObject):
         self._exec_remote("/hosts/%s/open" % self.host_name)
 
 
-
-
 class NoSuchObjectError(Exception):
     pass
 
+
 class LoadInformation(OpenLavaObject):
     pass
+
+
 class LoadValueList(OpenLavaObject):
     pass
+
 
 class RemoteException(Exception):
     def __init__(self, data):
@@ -222,6 +224,96 @@ class Resource(OpenLavaObject):
     pass
 
 
+class ConsumedResource(OpenLavaObject):
+    pass
+
+
+class ExecutionHost(OpenLavaObject):
+    pass
+
+
+class JobOption(OpenLavaObject):
+    pass
+
+
+class Process(OpenLavaObject):
+    pass
+
+
+class Job(OpenLavaObject):
+    @classmethod
+    def get_job_list(cls, connection, user_name=None, job_state="ACT", host_name=None, queue_name=None, job_name=None):
+        url = connection.url + "/jobs/"
+        if user_name == "all":
+            user_name = None
+
+        params = {
+            "queue_name": queue_name,
+            "job_name": job_name,
+            "host_name": host_name,
+            "job_state": job_state,
+            "user_name": user_name,
+        }
+        for k, v in params.items():
+            if v == None:
+                del (params[k])
+
+        url += "?" + urllib.urlencode(params)
+        request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
+        try:
+            data = connection.open(request).read()
+            data = json.loads(data)
+            if not isinstance(data, list):
+                print "Got strange data back"
+                data = []
+            return [cls(connection, data=i) for i in data]
+        except:
+            raise
+
+    def __init__(self, connection, job_id=None, array_id=None, data=None):
+        if job_id != None:
+            if array_id == None:
+                array_id = 0
+            url = connection.url + "/job/%s/%s" % (job_id, array_id)
+            req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
+            try:
+                data = connection.open(req).read()
+                data = json.loads(data)
+            except urllib2.HTTPError as e:
+                if e.code == 404:
+                    raise NoSuchObjectError("No such job: %s" % job_id)
+                else:
+                    raise
+
+        if not isinstance(data, dict):
+            raise ValueError("Data must be a dict")
+        if data['type'] != "Job":
+            raise ValueError("data is not of type Job")
+        self._queue = data['queue']
+        del (data['queue'])
+        self._submission_host = data['submission_host']
+        del (data['submission_host'])
+
+        OpenLavaObject.__init__(self, connection, data=data)
+        self.consumed_resources = [ConsumedResource(self._connection, data=d) for d in self.consumed_resources]
+        self.execution_hosts = [ExecutionHost(self._connection, data=d) for d in self.execution_hosts]
+        self.options = [JobOption(self._connection, data=d) for d in self.options]
+        self.processes = [Process(self._connection, data=d) for d in self.processes]
+        self.status = Status(self._connection, data=self.status)
+
+    @property
+    def submit_time_datetime(self):
+        return datetime.datetime.fromtimestamp(self.submit_time)
+
+    @property
+    def queue(self):
+        return Queue(self._connection, queue_name=self._queue['name'])
+
+    @property
+    def submission_host(self):
+        return Host(self._connection, host_name=self._submission_host['name'])
+
+
 class Queue(OpenLavaObject):
     @classmethod
     def get_queues_by_names(cls, connection, queue_names):
@@ -236,19 +328,19 @@ class Queue(OpenLavaObject):
 
     @classmethod
     def get_queue_list(cls, connection):
-        url=connection.url + "/queues/"
-        request = urllib2.Request(url,None, {'Content-Type': 'application/json'})
+        url = connection.url + "/queues/"
+        request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
         try:
             data = connection.open(request).read()
             data = json.loads(data)
             if not isinstance(data, list):
                 print "Got strange data back"
-                data=[]
+                data = []
             return [cls(connection, data=i) for i in data]
         except:
             raise
 
-    def __init__(self, connection,  queue_name=None, data=None):
+    def __init__(self, connection, queue_name=None, data=None):
         if queue_name:
             url = connection.url + "/queues/%s" % queue_name
             req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
@@ -285,57 +377,4 @@ class Queue(OpenLavaObject):
         self._exec_remote("/queues/%s/activate" % self.name)
 
 
-# class Job(OpenLavaObject):
-#     @classmethod
-#     def get_jobs(cls, conn, user=None, job_id=None, array_index=None):
-#         if job_id and array_index:
-#             return [Job(job_id=job_id, array_index=array_index)]
-#         elif job_id:
-#             url=conn.url + "/job/%d?json=1" % job_id
-#         elif user:
-#             url=conn.url + "/users/%s/jobs?json=1" % user
-#         else:
-#             url=conn.url + '/jobs?json=1'
-#         req = urllib2.Request(url,None, {'Content-Type': 'application/json'})
-#         try:
-#             data=conn.open(req).read()
-#             data=json.loads(data)
-#             if isinstance(data, dict):
-#                 data=[data]
-#
-#         except urllib2.HTTPError as e:
-#             if e.code==404:
-#                 raise ValueError("No such job ID: %d[%d]" % ( job_id, array_index ))
-#             else:
-#                 raise
-#         return [Job(auth=auth, params=i) for i in data]
-#
-#
-#
-#     def __init__(self,auth, params=None, job_id=None, array_index=None):
-#         OpenLavaObject.__init__(self, auth, params)
-#         if params:
-#             pass
-#         elif job_id:
-#             url = self._auth.url + "/job/%d/%d?json=1" % (job_id, array_index)
-#             req = urllib2.Request(url,None, {'Content-Type': 'application/json'})
-#             try:
-#                 data=self._auth.open(req).read()
-#                 data=json.loads(data)
-#                 for k,v in data.items():
-#                     setattr(self,k,v)
-#             except urllib2.HTTPError as e:
-#                 if e.code==404:
-#                     raise ValueError("No such job ID: %d[%d]" % ( job_id, array_index ))
-#                 else:
-#                     raise
-#         else:
-#             raise ValueError("No parameters or job id")
-#
-#         self.execution_hosts=[ExecutionHost(**i) for i in self.execution_hosts]
-#         self.status=Status(**self.status)
-#         self.submission_host=SubmissionHost(**self.submission_host)
-#         self.queue=Queue(**self.queue)
-
-
-__ALL__=[OpenLavaConnection, AuthenticationError, RemoteException, NoSuchObjectError, Host]
+__ALL__ = [OpenLavaConnection, AuthenticationError, RemoteException, NoSuchObjectError, Host, Job]
