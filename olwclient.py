@@ -301,6 +301,19 @@ class Job(OpenLavaObject):
         self.processes = [Process(self._connection, data=d) for d in self.processes]
         self.status = Status(self._connection, data=self.status)
 
+    def kill(self):
+        self._exec_remote("/job/%s/%s/kill" % (self.job_id, self.array_index))
+
+    def resume(self):
+        self._exec_remote("/job/%s/%s/resume" % (self.job_id, self.array_index))
+
+    def requeue(self):
+        self._exec_remote("/job/%s/%s/requeue" % (self.job_id, self.array_index))
+
+    def stop(self):
+        self._exec_remote("/job/%s/%s/stop" % (self.job_id, self.array_index))
+
+
     @property
     def submit_time_datetime(self):
         return datetime.datetime.fromtimestamp(self.submit_time)
