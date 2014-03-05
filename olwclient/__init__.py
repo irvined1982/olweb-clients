@@ -369,6 +369,12 @@ class Job(OpenLavaObject):
 class Queue(OpenLavaObject):
     @classmethod
     def get_queues_by_names(cls, connection, queue_names):
+        """Return a list of Queue objects that match the given queue_names.
+
+        :param list queue_names: List of queue names
+        :returns: List of Queue objects that match
+        :rtype: list
+        """
         if len(queue_names) == 1 and queue_names[0] == "all":
             queues = cls.get_queue_list(connection)
         elif len(queue_names) == 0:
@@ -380,6 +386,12 @@ class Queue(OpenLavaObject):
 
     @classmethod
     def get_queue_list(cls, connection):
+        """Returns a list of Queue objects that are available.
+
+        :returns: List of Queue objects
+        :rtype: list
+
+        """
         url = connection.url + "/queues/"
         request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
         try:
@@ -393,6 +405,11 @@ class Queue(OpenLavaObject):
             raise
 
     def __init__(self, connection, queue_name=None, data=None):
+        """
+        :param OpenLavaConnection connection: The connection instance to use
+        :param str queue_name: name of queue to load from remote server
+        :param dict data: pre-populated dictionary of queue data
+        """
         if queue_name:
             url = connection.url + "/queues/%s" % queue_name
             req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
@@ -417,16 +434,29 @@ class Queue(OpenLavaObject):
         raise NotImplementedError
 
     def close(self):
+        """Closes the queue.  The user must be a queue or cluster administrator for this operation to succeed.
+
+        :raise: RemoteException on failure"""
         self._exec_remote("/queues/%s/close" % self.name)
 
     def open(self):
+        """Opens the queue.  The user must be a queue or cluster administrator for this operation to succeed.
+
+        :raise: RemoteException on failure"""
         self._exec_remote("/queues/%s/open" % self.name)
 
     def inactivate(self):
+        """Inactivates the queue.  The user must be a queue or cluster administrator for this operation to succeed.
+
+        :raise: RemoteException on failure"""
         self._exec_remote("/queues/%s/inactivate" % self.name)
 
     def activate(self):
+        """Activates the queue.  The user must be a queue or cluster administrator for this operation to succeed.
+
+        :raise: RemoteException on failure"""
         self._exec_remote("/queues/%s/activate" % self.name)
+
 
 
 __ALL__ = [OpenLavaConnection, AuthenticationError, RemoteException, NoSuchObjectError, Host, Job]
