@@ -30,7 +30,10 @@ class AuthenticationError(Exception):
 
 
 class OpenLavaConnection(object):
-    """Connection and authentication handler for dealing with the server.  Subclass this when you need a different method of authentication"""
+    """
+    Connection and authentication handler for dealing with the server.  Subclass this when you
+need a different method of authentication
+    """
 
     @classmethod
     def configure_argument_list(cls, parser):
@@ -71,6 +74,7 @@ class OpenLavaConnection(object):
     @property
     def authenticated(self):
         """True if the connection is currently authenticated
+
         :returns: True if the connection is currently authenticated
         :rtype: Boolean
         """
@@ -81,6 +85,7 @@ class OpenLavaConnection(object):
 
     def login(self):
         """Logs the user into the server.
+
         :raise: AuthenticationError if the user cannot be authenticated
         """
         data = {
@@ -301,6 +306,7 @@ Total jobs on the host
 Total slots consumed on the host
 
 """
+
     @classmethod
     def get_hosts_by_names(cls, connection, host_names):
         """Return a list of Host objects that are in host_names
@@ -386,6 +392,7 @@ class LoadValueList(OpenLavaObject):
 
 class RemoteException(Exception):
     """Indicates an exception hapenned on the remote server"""
+
     def __init__(self, data):
         Exception.__init__(self, data['message'])
         for k, v in data.iteritems():
@@ -493,6 +500,7 @@ Numeric code of the option
     """
     pass
 
+
 class Process(OpenLavaObject):
     """Process started by submitted job.
 
@@ -519,6 +527,7 @@ Process ID of the process
 
 """
     pass
+
 
 class Job(OpenLavaObject):
     """Get information about, and manipulate jobs on remote server.
@@ -703,10 +712,11 @@ User given priority for the job
 
 
     """
+
     @classmethod
     def submit(cls, connection, **kwargs):
         connection.login()
-        allowed_keys=[
+        allowed_keys = [
             'options',
             'options2',
             'command',
@@ -721,12 +731,10 @@ User given priority for the job
         data = json.dumps(kwargs)
         url = connection.url + "/job/submit"
         request = urllib2.Request(url, data, {'Content-Type': 'application/json'})
-        data=connection.open(request).read()
+        data = connection.open(request).read()
         data = json.loads(data)
 
-
         return Job(connection, data=data)
-
 
 
     @classmethod
@@ -1053,6 +1061,7 @@ Total number of jobs in the queue.
 Total number of slots consumed by jobs in the queue.
 
     """
+
     @classmethod
     def get_queues_by_names(cls, connection, queue_names):
         """Return a list of Queue objects that match the given queue_names.
@@ -1143,7 +1152,6 @@ Total number of slots consumed by jobs in the queue.
 
         :raise: RemoteException on failure"""
         self._exec_remote("/queues/%s/activate" % self.name)
-
 
 
 __ALL__ = [OpenLavaConnection, AuthenticationError, RemoteException, NoSuchObjectError, Host, Job]
