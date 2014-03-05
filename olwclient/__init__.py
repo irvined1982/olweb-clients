@@ -472,7 +472,7 @@ The value of the consumed resource
 
 
 class JobOption(OpenLavaObject):
-     """Option submitted with Job.
+    """Option submitted with Job.
 
 .. py:attribute:: description
 
