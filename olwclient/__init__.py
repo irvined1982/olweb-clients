@@ -151,8 +151,165 @@ class OpenLavaObject(object):
 
 
 class Host(OpenLavaObject):
+    """Retrieve queue information and perform administrative actions on queues on the remote cluster.
+
+.. py:attribute:: admins
+
+List of user names that have administrative rights on this host.
+
+:returns: list of user names
+:rtype: list of str
+
+.. py:attribute:: cpu_factor
+
+CPU Factor of the host
+
+.. py:attribute:: description
+
+Description of the host
+
+.. py:attribute:: has_checkpoint_support
+
+True if the host supports checkpointing
+
+.. py:attribute:: has_kernel_checkpoint_copy
+
+True if the host has kernel checkpointing support
+
+.. py:attribute:: host_model
+
+Model name of the host
+
+.. py:attribute:: host_name
+
+Hostname of the host
+
+.. py:attribute:: host_type
+
+Host architecture
+
+.. py:attribute:: is_busy
+
+True if the host is currently busy
+
+.. py:attribute:: is_closed
+
+True if the host is currently closed
+
+.. py:attribute:: is_down
+
+True if the host is down for an unknown reason
+
+.. py:attribute:: is_server
+
+True if the host is a job server
+
+.. py:attribute:: load_information
+
+List of LoadIndex objects
+
+.. py:attribute:: max_jobs
+
+The maximum number of jobs that may execute on this host
+
+.. py:attribute:: max_processors
+
+The total number of processors available to jobs on this host
+
+.. py:attribute:: max_ram
+
+The total amount of RAM available to jobs on this host
+
+.. py:attribute:: max_slots
+
+The total number of slots available to jobs on this host
+
+.. py:attribute:: max_slots_per_user
+
+The maximum number of slots that may be consumed per user on this host
+
+.. py:attribute:: max_swap
+
+The maximum amount of swap space that is available to jobs on this host
+
+.. py:attribute:: max_tmp
+
+The maximum amount of temporary space that is available to jobs on this host
+
+.. py:attribute:: name
+
+The name of the host
+
+.. py:attribute:: num_disks
+
+The number of physical disks attached
+
+.. py:attribute:: num_reserved_slots
+
+The number of slots that are reserved
+
+.. py:attribute:: num_running_jobs
+
+The number of jobs that are running
+
+.. py:attribute:: num_running_slots
+
+The number of slots that are running
+
+.. py:attribute:: num_suspended_jobs
+
+The number of jobs that are suspended
+
+.. py:attribute:: num_suspended_slots
+
+The number of slots that are suspended
+
+.. py:attribute:: num_system_suspended_jobs
+
+The number of jobs that have been suspended by the system
+
+.. py:attribute:: num_system_suspended_slots
+
+The number of slots that have been suspended by the system
+
+.. py:attribute:: num_user_suspended_jobs
+
+The number of jobs that have been suspended by the user
+
+.. py:attribute:: num_user_suspended_slots
+
+The number of slots that have been suspended by the user
+
+.. py:attribute:: resources
+
+List of resources that are available on the system
+
+.. py:attribute:: run_windows
+
+The run windows that the host is open for. If empty indicates that the host is always open.
+
+.. py:attribute:: statuses
+
+List of statuses that apply to the host
+
+.. py:attribute:: total_jobs
+
+Total jobs on the host
+
+.. py:attribute:: total_slots
+
+Total slots consumed on the host
+
+"""
     @classmethod
     def get_hosts_by_names(cls, connection, host_names):
+        """Return a list of Host objects that are in host_names
+
+        :param list host_names: List of hostnames to get
+        :returns: List of Host objects
+        :rtype: list
+
+     """
         if len(host_names) == 1 and host_names[0] == "all":
             hosts = cls.get_host_list(connection)
         elif len(host_names) == 0:
@@ -164,6 +321,7 @@ class Host(OpenLavaObject):
 
     @classmethod
     def get_host_list(cls, connection):
+        """Returns all hosts on the remote cluster"""
         url = connection.url + "/hosts"
         request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
         try:
@@ -200,16 +358,21 @@ class Host(OpenLavaObject):
 
 
     def jobs(self):
+        """Return a list of Jobs that are executing on the Host.
+        """
         raise NotImplementedError
 
     def close(self):
+        """Close the host, no new jobs will be scheduled"""
         self._exec_remote("/hosts/%s/close" % self.host_name)
 
     def open(self):
+        """Open the host for scheduling"""
         self._exec_remote("/hosts/%s/open" % self.host_name)
 
 
 class NoSuchObjectError(Exception):
+    """Indicates that the requested object does not exist on the remote server"""
     pass
 
 
@@ -222,6 +385,7 @@ class LoadValueList(OpenLavaObject):
 
 
 class RemoteException(Exception):
+    """Indicates an exception hapenned on the remote server"""
     def __init__(self, data):
         Exception.__init__(self, data['message'])
         for k, v in data.iteritems():
@@ -229,31 +393,316 @@ class RemoteException(Exception):
 
 
 class Status(OpenLavaObject):
+    """Status of an object.
+
+.. py:attribute:: description
+
+Description of the status
+
+.. py:attribute:: friendly
+
+Friendly name for the status
+
+.. py:attribute:: name
+
+Full name of the status
+
+.. py:attribute:: status
+
+Numeric code of the status
+
+    """
     pass
 
 
 class Resource(OpenLavaObject):
-    """Resource"""
+    """Available resource on the remote cluster.
+
+.. py:attribute:: description
+
+Description of the resource
+
+.. py:attribute:: flags
+
+Flags set on the resource
+
+.. note:: Openlava scheduler only.
+
+.. py:attribute:: interval
+
+Resource update interval for dynamic resources
+
+.. note:: Openlava scheduler only.
+
+.. py:attribute:: name
+
+Name of the resource
+
+.. py:attribute:: order
+
+Ordering of the resource
+
+.. note:: Openlava scheduler only.
+
+    """
     pass
 
 
 class ConsumedResource(OpenLavaObject):
-    pass
+    """Resources consumed by a job.
 
+.. py:attribute:: limit
 
-class ExecutionHost(OpenLavaObject):
+Limit imposed by the scheduler on the resource
+
+.. py:attribute:: name
+
+Name of the resource
+
+.. py:attribute:: unit
+
+The units the resource is measured in
+
+.. py:attribute:: value
+
+The value of the consumed resource
+
+    """
     pass
 
 
 class JobOption(OpenLavaObject):
-    pass
+     """Option submitted with Job.
 
+.. py:attribute:: description
+
+Description of the option
+
+.. py:attribute:: friendly
+
+Friendly name for the option
+
+.. py:attribute:: name
+
+Full name of the option
+
+.. py:attribute:: status
+
+Numeric code of the option
+
+    """
+    pass
 
 class Process(OpenLavaObject):
+    """Process started by submitted job.
+
+.. py:attribute:: cray_job_id
+
+Cray job ID of the process
+
+.. py:attribute:: hostname
+
+Hostname process was started on, may be None if unknown
+
+.. py:attribute:: parent_process_id
+
+Process ID of parent process.
+
+.. py:attribute:: process_group_id
+
+Group ID of the process
+
+.. py:attribute:: process_id
+
+Process ID of the process
+
+
+"""
     pass
 
-
 class Job(OpenLavaObject):
+    """Get information about, and manipulate jobs on remote server.
+
+.. py:attribute:: admins
+
+List of user names that have administrative rights on this host.
+
+:returns: list of user names
+:rtype: list of str
+
+.. py:attribute:: array_index
+
+The array index of the job, 0 for non-array jobs.
+
+.. py:attribute:: begin_time
+
+Earliest time (Epoch UTC) that the job may begin
+
+.. py:attribute:: checkpoint_directory
+
+Data where checkpoint data will be written to.
+
+.. py:attribute:: checkpoint_period
+
+Time between checkpointing operations
+
+.. py:attribute:: command
+
+Command to execute
+
+.. py:attribute:: consumed_resources
+
+List of ConsumedResource objects
+
+.. py:attribute:: cpu_factor
+
+.. py:attribute:: cpu_time
+
+.. py:attribute:: cwd
+
+Current Working Directory of the job
+
+.. py:attribute:: dependency_condition
+
+Dependency conditions that must be met before the job will be dispatched
+
+.. py:attribute:: email_user
+
+User to email job notifications to
+
+.. py:attribute:: end_time
+
+Time job ended. (Epoch UTC)
+
+.. py:attribute:: error_file_name
+
+.. py:attribute:: execution_cwd
+
+.. py:attribute:: execution_home_directory
+
+.. py:attribute:: execution_hosts
+
+List of host objects that are executing the job
+
+.. py:attribute:: execution_user_id
+
+User ID under which the job is executing
+
+.. py:attribute:: execution_user_name
+
+User name under which the job is executing
+
+.. py:attribute:: host_specification
+.. py:attribute:: input_file_name
+.. py:attribute:: is_completed
+
+True if the job completed
+
+.. py:attribute:: is_failed
+
+True if the job failed
+
+.. py:attribute:: is_pending
+
+True if the job is pending
+
+.. py:attribute:: is_running
+
+True if the job is running
+
+.. py:attribute:: is_suspended
+
+True if the job is suspended
+
+.. py:attribute:: job_id
+
+ID of the job
+
+.. py:attribute:: login_shell
+
+.. py:attribute:: max_requested_slots
+
+.. py:attribute:: name
+
+.. py:attribute:: options
+
+List of JobOptions for the job
+
+.. py:attribute:: output_file_name
+
+.. py:attribute:: parent_group
+
+.. py:attribute:: pending_reasons
+
+.. py:attribute:: pre_execution_command
+
+.. py:attribute:: predicted_start_time
+
+.. py:attribute:: priority
+
+.. py:attribute:: process_id
+
+.. py:attribute:: processes
+
+.. py:attribute:: project_names
+
+.. py:attribute:: requested_hosts
+
+.. py:attribute:: requested_resources
+
+.. py:attribute:: requested_slots
+
+.. py:attribute:: reservation_time
+
+.. py:attribute:: resource_usage_last_update_time
+
+Last time resource usage was updated (Epoch UTC)
+
+.. py:attribute:: runtime_limits
+
+List of runtime limits
+
+.. py:attribute:: service_port
+
+NIOS Service port
+
+.. py:attribute:: start_time
+
+Time job started (Epoch UTC)
+
+.. py:attribute:: status
+
+Job Status object
+
+.. py:attribute:: submission_host
+
+Host where job was submitted
+
+.. py:attribute:: submit_home_directory
+
+Home directory on submission host.
+
+.. py:attribute:: submit_time
+
+Job submit time (Epoch UTC)
+
+.. py:attribute:: suspension_reasons
+
+.. py:attribute:: termination_signal
+
+.. py:attribute:: termination_time
+
+Termination deadline in seconds. (Epoch UTC)
+.. py:attribute:: user_name
+
+User name of job submitter
+
+.. py:attribute:: user_priority
+
+User given priority for the job
+
+
+    """
     @classmethod
     def submit(cls, connection, **kwargs):
         connection.login()
@@ -335,21 +784,37 @@ class Job(OpenLavaObject):
 
         OpenLavaObject.__init__(self, connection, data=data)
         self.consumed_resources = [ConsumedResource(self._connection, data=d) for d in self.consumed_resources]
-        self.execution_hosts = [ExecutionHost(self._connection, data=d) for d in self.execution_hosts]
+        self.execution_hosts = [Host(self._connection, host_name=d['name']) for d in self.execution_hosts]
         self.options = [JobOption(self._connection, data=d) for d in self.options]
         self.processes = [Process(self._connection, data=d) for d in self.processes]
         self.status = Status(self._connection, data=self.status)
 
     def kill(self):
+        """Kills the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
+
+        :raise: RemoteException on failure
+        """
         self._exec_remote("/job/%s/%s/kill" % (self.job_id, self.array_index))
 
     def resume(self):
+        """Resumes the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
+
+        :raise: RemoteException on failure
+        """
         self._exec_remote("/job/%s/%s/resume" % (self.job_id, self.array_index))
 
     def requeue(self):
+        """Requeues the job.  The user must be a job owner,  queue or cluster administrator for this operation to succeed.
+
+        :raise: RemoteException on failure
+        """
         self._exec_remote("/job/%s/%s/requeue" % (self.job_id, self.array_index))
 
     def stop(self):
+        """Suspends the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
+
+        :raise: RemoteException on failure
+        """
         self._exec_remote("/job/%s/%s/stop" % (self.job_id, self.array_index))
 
 
@@ -438,10 +903,6 @@ Returns true if the queue is actively dispatching new jobs
 Path to the job starter command
 
 .. note:: Openlava scheduler only.
-
-.. py:method:: jobs
-
-Returns a list of SimpleJob objects.
 
 .. py:attribute:: max_jobs
 
@@ -591,7 +1052,7 @@ Total number of jobs in the queue.
 
 Total number of slots consumed by jobs in the queue.
 
-	"""
+    """
     @classmethod
     def get_queues_by_names(cls, connection, queue_names):
         """Return a list of Queue objects that match the given queue_names.
@@ -656,6 +1117,7 @@ Total number of slots consumed by jobs in the queue.
         # runtime limits
 
     def jobs(self):
+        """Returns a list of SimpleJob objects."""
         raise NotImplementedError
 
     def close(self):
