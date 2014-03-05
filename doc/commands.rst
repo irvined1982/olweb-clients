@@ -1,6 +1,11 @@
 Command Line Tools
 ==================
 
+The following command line tools have been created based on the syntax of the openlava command line utilities to demonstrate how to perform tasks using the API.
+
+badmin.py
+---------
+
 .. program:: badmin.py
 
 Provides similar functionality and syntax to the OpenLava badmin command.  Queue and host maintenance.
@@ -30,6 +35,10 @@ Activates specified queues, or all queues if the reserved word all is specified.
 .. option:: qinact [queue_name ... | all]
 
 Inactivates  specified queues, or all queues if the reserved word all is specified.
+
+bhosts.py
+---------
+
 .. program:: bhosts.py
 
 Provides similar functionality and syntax to the OpenLava bhosts command.  Displays hosts and their static and dynamic resource.
@@ -48,7 +57,12 @@ Displays host information in a (long) multi-line format. In addition to the defa
 
 .. option:: host_name ... | host_group ...
 
-Only  displays information about the specified hosts or host groups. For host groups, the names of the hosts belonging to the group are displayed instead of the name of the host group. Do not use quotes when specifying multiple hosts or host groups... program:: bjobs.py
+Only  displays information about the specified hosts or host groups. For host groups, the names of the hosts belonging to the group are displayed instead of the name of the host group. Do not use quotes when specifying multiple hosts or host groups...
+
+bjobs.py
+--------
+
+program:: bjobs.py
 
 Provides similar functionality and syntax to the OpenLava bjobs command.  Displays information about jobs.  By default, displays information about your own pending, running and suspended jobs.
 
@@ -109,6 +123,10 @@ The command bqueues.py returns a list of queues configured in the system, and in
 .. option:: -J job_name
 
 Displays information about the specified jobs or job arrays.
+
+bkill.py
+--------
+
 .. program:: bkill.py
 
 Provides similar functionality and syntax to the OpenLava bkill command.  Sends signals to kill, suspend, or resume unfinished jobs.
@@ -139,6 +157,9 @@ Jobs submitted by any user can be specified here without using the -u option. If
 
 The  options  -u,  -q,  -m and -J have no effect if a job ID other than 0 is specified. Job IDs are returned at job submission time (see bsub(1)) and may be obtained with the bjobs command (see bjobs(1)).
 
+bqueues.py
+----------
+
 .. program:: bqueues.py
 
 Provides similar functionality and syntax to the OpenLava bqueues command.  Displays information about queues.
@@ -163,7 +184,12 @@ Displays  the  queues  that can accept jobs from the specified user or user grou
 
 .. option:: queue_name ...
 
-Displays information about the specified queues... program:: bsub.py
+Displays information about the specified queues...
+
+bsub.py
+-------
+
+program:: bsub.py
 
 Provides similar functionality and syntax to the OpenLava bsub command.  Submits a batch job using the API.
 
