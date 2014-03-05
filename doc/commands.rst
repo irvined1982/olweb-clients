@@ -57,12 +57,13 @@ Displays host information in a (long) multi-line format. In addition to the defa
 
 .. option:: host_name ... | host_group ...
 
-Only  displays information about the specified hosts or host groups. For host groups, the names of the hosts belonging to the group are displayed instead of the name of the host group. Do not use quotes when specifying multiple hosts or host groups...
+Only  displays information about the specified hosts or host groups. For host groups, the names of the hosts belonging to the group are displayed instead of the name of the host group. Do not use quotes when specifying multiple hosts or host groups.
+
 
 bjobs.py
 --------
 
-program:: bjobs.py
+.. program:: bjobs.py
 
 Provides similar functionality and syntax to the OpenLava bjobs command.  Displays information about jobs.  By default, displays information about your own pending, running and suspended jobs.
 
