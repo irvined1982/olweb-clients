@@ -242,6 +242,32 @@ class Process(OpenLavaObject):
 
 class Job(OpenLavaObject):
     @classmethod
+    def submit(cls, connection, **kwargs):
+        connection.login()
+        allowed_keys=[
+            'options',
+            'options2',
+            'command',
+            'num_processors',
+            'max_num_processors',
+        ]
+
+        for k in kwargs.keys():
+            if k not in allowed_keys:
+                raise ValueError("Argument: %s is not valid" % k)
+
+        data = json.dumps(kwargs)
+        url = connection.url + "/job/submit"
+        request = urllib2.Request(url, data, {'Content-Type': 'application/json'})
+        data=connection.open(request).read()
+        data = json.loads(data)
+
+
+        return Job(connection, data=data)
+
+
+
+    @classmethod
     def get_job_list(cls, connection, user_name=None, job_state="ACT", host_name=None, queue_name=None, job_name=None):
         url = connection.url + "/jobs/"
         if user_name == "all":
