@@ -367,12 +367,229 @@ class Job(OpenLavaObject):
 
 
 class Queue(OpenLavaObject):
-    """Queue stuff
+    """Retrieve queue information and perform administrative actions on queues on the remote cluster.
 
 .. py:attribute:: accept_interval
 
 Queue accept interval in seconds
 
+.. py:attribute:: admins
+
+List of user names that have administrative rights on this queue.
+
+:returns: list of usernames
+:rtype: list of str
+
+.. py:attribute:: allowed_hosts
+
+Hosts that this queue is allowed to submit to.
+
+:returns: List of host names, or None when queue can dispatch to all hosts.
+:rtype: list or None
+
+.. py:attribute:: allowed_users
+
+Users that may use this queue.
+
+:returns: List of user names, or None when all users can submit to this queue.
+:rtype: list or None
+
+.. py:attribute:: attributes
+
+Attributes of the Queue.
+
+:returns: List of QueueAttributes
+:rtype: QueueAttribute
+
+.. py:attribute:: checkpoint_data_directory
+
+Data where checkpoint data will be written to.
+
+.. py:attribute:: checkpoint_period
+
+Time in seconds between checkpointing.  -1 indicates no checkpointing.
+
+.. py:attribute:: default_slots_per_job
+
+The default number of job slots consumed by a job
+
+.. py:attribute:: description
+
+Description of the queue.
+
+.. py:attribute:: dispatch_windows
+
+String of time windows that the queue will dispatch during.  Empty of always open.
+
+.. note:: Openlava scheduler only.
+
+.. py:attribute:: host_specification
+
+.. py:attribute:: is_accepting_jobs
+
+Returns true if the queue is open and accepting new jobs
+
+.. py:attribute:: is_despatching_jobs
+
+Returns true if the queue is actively dispatching new jobs
+
+.. py:attribute:: job_starter_command
+
+Path to the job starter command
+
+.. note:: Openlava scheduler only.
+
+.. py:method:: jobs
+
+Returns a list of SimpleJob objects.
+
+.. py:attribute:: max_jobs
+
+Maximum number of jobs that may execute in the queue
+
+.. py:attribute:: max_jobs_per_host
+
+Maximum number of jobs per host
+
+.. py:attribute:: max_jobs_per_processor
+
+Maximum number of jobs per processor
+
+.. py:attribute:: max_jobs_per_user
+
+Maximum number of jobs per user
+
+.. py:attribute:: max_slots
+
+Maximum number of slots that may execute in the queue
+
+.. py:attribute:: max_slots_per_host
+
+Maximum number of slots that may be consumed per host
+
+.. py:attribute:: max_slots_per_job
+
+Maximum number of slots that can be consumed per job
+
+.. py:attribute:: max_slots_per_processor
+
+Maximum number of slots that can be consumed per processor
+
+.. py:attribute:: max_slots_per_user
+
+Maximum number of slots that can be consumed per user
+
+.. py:attribute:: migration_threshold
+
+.. py:attribute:: min_slots_per_job
+
+Minimum number of slots that may be consumed per job
+
+.. py:attribute:: name
+
+Name of the queue
+
+.. py:attribute:: nice
+
+Nice value of jobs running in the queue
+
+.. py:attribute:: num_pending_jobs
+
+Current number of jobs that are pending
+
+.. py:attribute:: num_pending_slots
+
+Current number of slots that are pending
+
+.. py:attribute:: num_reserved_slots
+
+Current number of slots that are reserved
+
+.. py:attribute:: num_running_jobs
+
+Current number of jobs that are running
+
+.. py:attribute:: num_running_slots
+
+Current number of slots that are running
+
+.. py:attribute:: num_suspended_jobs
+
+Current number of jobs that are suspended
+
+.. py:attribute:: num_suspended_slots
+
+Current number of slots that are suspended
+
+.. py:attribute:: num_system_suspended_jobs
+
+Current number of jobs that are suspended by the system
+
+.. py:attribute:: num_system_suspended_slots
+
+Current number of slots that are suspended by the system
+
+.. py:attribute:: num_user_suspended_jobs
+
+Current number of jobs that are suspended by a user
+
+.. py:attribute:: num_user_suspended_slots
+
+Current number of slots that are suspended by a user
+
+.. py:attribute:: post_execution_command
+
+Command that will execute after the job has completed
+
+.. py:attribute:: pre_execution_command
+
+Command that will execute prior to the job executing
+
+.. py:attribute:: pre_post_user_name
+
+Username of the user who will execute the pre/post commands
+
+.. py:attribute:: priority
+
+Priority of the queue.
+
+.. py:attribute:: requeue_exit_values
+
+Jobs exiting with this value will be requeued
+
+.. py:attribute:: resource_requirements
+
+Default resource requirements of the queue
+
+.. py:attribute:: resume_action_command
+
+.. py:attribute:: resume_condition
+
+.. py:attribute:: run_windows
+
+.. py:attribute:: runtime_limits
+
+.. py:attribute:: scheduling_delay
+
+Delay between receiving a job and performing scheduling operations
+
+.. py:attribute:: slot_hold_time
+
+.. py:attribute:: statuses
+
+.. py:attribute:: stop_condition
+
+.. py:attribute:: suspend_action_command
+
+.. py:attribute:: terminate_action_command
+
+.. py:attribute:: total_jobs
+
+Total number of jobs in the queue.
+
+.. py:attribute:: total_slots
+
+Total number of slots consumed by jobs in the queue.
 
 	"""
     @classmethod
