@@ -21,21 +21,17 @@ from setuptools import setup
 
 
 setup(
-		name = "OpenlavaWeb clients",
-		version = "0.0.1",
-		author = "David Irvine",
-		author_email = "irvined@gmail.com.com",
-		description = ("An demonstration of how to create, document, and publish "
-								                                   "to the cheese shop a5 pypi.org."),
-							    license = "BSD",
-								    keywords = "example documentation tutorial",
-									    url = "http://packages.python.org/an_example_pypi_project",
-										    packages=['an_example_pypi_project', 'tests'],
-											    long_description=read('README'),
-												    classifiers=[
-														        "Development Status :: 3 - Alpha",
-																        "Topic :: Utilities",
-																		        "License :: OSI Approved :: BSD License",
-																				    ],
-													)
-
+    name="OpenlavaWeb clients",
+    version="0.0.1",
+    author="David Irvine",
+    author_email="irvined@gmail.com.com",
+    description=("Client library for OpenlavaWeb API"),
+    license="GPL v2",
+    keywords="Openlava Web Clients",
+    packages=['olwclient'],
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Topic :: Utilities",
+        "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+    ],
+)

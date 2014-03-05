@@ -30,7 +30,7 @@ class AuthenticationError(Exception):
 
 
 class OpenLavaConnection(object):
-    """Connection and authentication handler for dealing with the server"""
+    """Connection and authentication handler for dealing with the server.  Subclass this when you need a different method of authentication"""
 
     @classmethod
     def configure_argument_list(cls, parser):
@@ -70,14 +70,19 @@ class OpenLavaConnection(object):
 
     @property
     def authenticated(self):
-        """True if the connection is currently authenticated"""
+        """True if the connection is currently authenticated
+        :returns: True if the connection is currently authenticated
+        :rtype: Boolean
+        """
         for c in self._cookies:
             if c.name == 'sessionid':
                 return True
         return False
 
     def login(self):
-        """Logs the user into the server"""
+        """Logs the user into the server.
+        :raise: AuthenticationError if the user cannot be authenticated
+        """
         data = {
             'username': self.username,
             'password': self.password,
@@ -110,7 +115,15 @@ class OpenLavaConnection(object):
 
 
 class OpenLavaObject(object):
+    """Base class for OpenLava objects, automatically populates attributes based on values returned from the server."""
+
     def __init__(self, connection, data=None):
+        """Create a new instance of the class.
+
+        :param OpenLavaConnection connection: Connection object that will be used to connect to the server and retrieve data.
+        :param dict data: Optional dictionary containing pre-retrieved data from the server, this will be populated into the objects data structure
+
+        """
         self._connection = connection
         if json:
             if not isinstance(data, dict):
