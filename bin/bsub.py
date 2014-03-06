@@ -100,7 +100,11 @@ payload={
 if args.job_name:
     payload['job_name'] = args.job_name
 
-print payload
-j=Job.submit(connection, **payload)
+j=Host.get_host_list(connection)
+print connection._cookies
+try:
+	j=Job.submit(connection, **payload)
+except Exception as e:
+	print e.read()
 print "Job: %s[%s] was submitted." % (j.job_id, j.array_index)
 
