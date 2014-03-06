@@ -17,10 +17,10 @@
 # along with olwclients. If not, see <http://www.gnu.org/licenses/>.
 import argparse
 from olwclient import *
-import os
 import getpass
 import re
 import sys
+
 
 def print_long():
     for job in jobs:
@@ -45,7 +45,7 @@ def print_long():
             job_id = "%s[%s]" % (job.job_id, job.array_index)
 
         row = "Job <%s>, User <%s>, Project <%s>, Status <%s>, Queue <%s>, Command <%s>" % (
-        job_id, job.user_name, job.project_names[0], status, job.queue.name, job.command)
+            job_id, job.user_name, job.project_names[0], status, job.queue.name, job.command)
 
         if len(row) > 80:
             print row[:80]
@@ -196,8 +196,8 @@ if len(args.job_ids) > 0:
         except ValueError:
             match = re.search('\d+\[\d+\]', job_id)
             if match:
-                jid=match.group(0)
-                aid=match.group(1)
+                jid = match.group(0)
+                aid = match.group(1)
             else:
                 print "Invalid job id: %s" % job_id
                 sys.exit(1)
@@ -211,7 +211,6 @@ else:
                             queue_name=args.queue_name,
                             job_name=args.job_name,
     )
-
 
 if args.long:
     print_long()

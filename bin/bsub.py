@@ -103,8 +103,9 @@ if args.job_name:
 j=Host.get_host_list(connection)
 print connection._cookies
 try:
-	j=Job.submit(connection, **payload)
+    j=Job.submit(connection, **payload)
+    print "Job: %s[%s] was submitted." % (j.job_id, j.array_index)
 except Exception as e:
-	print e.read()
-print "Job: %s[%s] was submitted." % (j.job_id, j.array_index)
+    print e.read()
+
 

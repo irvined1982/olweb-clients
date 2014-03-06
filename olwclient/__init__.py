@@ -61,6 +61,7 @@ need a different method of authentication
         self.password = args.password
         self.url = args.url
         self.url = self.url.rstrip("/")
+        self._csrf_token = None
 
         self._cookies = cookielib.LWPCookieJar()
         handlers = [
@@ -96,11 +97,19 @@ need a different method of authentication
         url = self.url + "/accounts/ajax_login"
         req = urllib2.Request(url, data, {'Content-Type': 'application/json'})
         f = self._open(req)
-        f = urllib2.urlopen(req)
         data = json.loads(f.read())
         f.close()
+
         if not self.authenticated:
             raise AuthenticationError(data['description'])
+
+        url = self.url + "/get_token"
+        req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
+        f = self._open(req)
+        data = json.loads(f.read())
+        self._csrf_token = data['cookie']
+        self._opener.addheaders.append( ('X-CSRFToken', self._csrf_token) )
+        f.close()
 
     def _open(self, request):
         return self._opener.open(request)
