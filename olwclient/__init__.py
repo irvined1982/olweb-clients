@@ -62,7 +62,7 @@ need a different method of authentication
         self.url = args.url
         self.url = self.url.rstrip("/")
         self._csrf_token = None
-
+        self._referer = None
         self._cookies = cookielib.LWPCookieJar()
         handlers = [
             urllib2.HTTPHandler(),
@@ -108,10 +108,27 @@ need a different method of authentication
         f = self._open(req)
         data = json.loads(f.read())
         self._csrf_token = data['cookie']
-        self._opener.addheaders.append( ('X-CSRFToken', self._csrf_token) )
+        found=False
+        for h in self._opener.addheaders:
+            if h[0] == 'X-CSRFToken':
+                found = True
+        if not found:
+            self._opener.addheaders.append( ('X-CSRFToken', self._csrf_token) )
         f.close()
 
     def _open(self, request):
+
+        if self._referer:
+            headers=[]
+            for h in self._opener.addheaders:
+                if h[0] == 'Referer':
+                    continue
+                else:
+                    headers.append(h)
+            headers.append(('Referer', self._referer))
+            self._opener.addheaders = headers
+
+        self._referer = request.get_full_url()
         return self._opener.open(request)
 
     def open(self, request):

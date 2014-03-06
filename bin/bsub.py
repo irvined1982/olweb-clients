@@ -25,22 +25,6 @@ import sys
 parser = argparse.ArgumentParser(description='Displays information about hosts')
 OpenLavaConnection.configure_argument_list(parser)
 
-
-
-
-
-
-
-# parser.add_argument("-J", dest="job_name", default=None,
-#                     help="Operates only on jobs with the specified job_name. The -J option is ignored if a job ID other than 0 is specified in the job_ID option.")
-# parser.add_argument("-m", dest="host_name", default=None,
-#                     help="Operates only on jobs dispatched to the specified host or host group.")
-# parser.add_argument("-q", dest="queue_name", default=None,
-#                     help="Operates only on jobs in the specified queue.")
-# parser.add_argument("-u", dest="user_name", default=getpass.getuser(),
-#                     help="Operates only on jobs submitted by the specified user or user group (see bugroup(1)), or by all users if the reserved user name all is specified.")
-
-
 parser.add_argument("-B", action='append_const', const=0x100, dest="options",
                     help="Sends mail to you when the job is dispatched and begins execution.")
 
@@ -57,16 +41,13 @@ parser.add_argument("-x", action='append_const', const=0x40, dest="options",
                     help="Puts the host running your job into exclusive execution mode.")
 
 parser.add_argument("-n", dest="procs", default="1",
-                     help="Submits a parallel job and specifies the minimum and maximum numbers of processors required to run the job")
+                    help="Submits a parallel job and specifies the minimum and maximum numbers of processors required to run the job")
 
 parser.add_argument("-J", dest="job_name", default=None,
                     help="Assigns the specified name to the job, and, for job arrays, specifies the indices of the job array and optionally the maximum number of jobs that can run at any given time.")
 
 parser.add_argument("commands", nargs='+', type=str, default=None,
                     help='Command to execute on the remote host')
-
-# parser.add_argument("-s", dest="signal", default="kill", choices=["kill", "suspend", "resume", "requeue"], help="Sends the specified signal to specified jobs. Signals can be one of: kill, suspend, resume, requeue," )
-
 
 args = parser.parse_args()
 
@@ -77,11 +58,11 @@ min_processors, sep, max_processors = args.procs.partition(",")
 min_processors = int(min_processors)
 
 try:
-    max_processors=int(max_processors)
+    max_processors = int(max_processors)
 except ValueError:
     max_processors = min_processors
-options=0
-options2=0
+options = 0
+options2 = 0
 if args.options:
     for o in args.options:
         options = options | o
@@ -89,7 +70,7 @@ if args.options2:
     for o in args.options2:
         options2 = options2 | o
 
-payload={
+payload = {
     "options": options,
     "options2": options2,
     "num_processors": min_processors,
@@ -99,11 +80,10 @@ payload={
 
 if args.job_name:
     payload['job_name'] = args.job_name
+connection.login()
 
-j=Host.get_host_list(connection)
-print connection._cookies
 try:
-    j=Job.submit(connection, **payload)
+    j = Job.submit(connection, **payload)
     print "Job: %s[%s] was submitted." % (j.job_id, j.array_index)
 except Exception as e:
     print e.read()
