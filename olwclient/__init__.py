@@ -748,6 +748,7 @@ User given priority for the job
             'command',
             'num_processors',
             'max_num_processors',
+            'queue_name'
         ]
 
         for k in kwargs.keys():
@@ -759,9 +760,9 @@ User given priority for the job
         request = urllib2.Request(url, data, {'Content-Type': 'application/json'})
         data = connection.open(request).read()
         data = json.loads(data)
-
+        if 'status' in data and data['status'] == 'Fail':
+            raise RemoteException(data)
         return Job(connection, data=data)
-
 
     @classmethod
     def get_job_list(cls, connection, user_name=None, job_state="ACT", host_name=None, queue_name=None, job_name=None):

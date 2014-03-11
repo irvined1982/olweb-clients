@@ -46,6 +46,8 @@ parser.add_argument("-n", dest="procs", default="1",
 parser.add_argument("-J", dest="job_name", default=None,
                     help="Assigns the specified name to the job, and, for job arrays, specifies the indices of the job array and optionally the maximum number of jobs that can run at any given time.")
 
+parser.add_argument("-q", dest="queue_name", default=None, help="Submits the job to the specified queues.")
+
 parser.add_argument("commands", nargs='+', type=str, default=None,
                     help='Command to execute on the remote host')
 
@@ -78,14 +80,20 @@ payload = {
     "command": command,
 }
 
+if args.queue_name:
+    payload['queue_name'] = args.queue_name
+
 if args.job_name:
     payload['job_name'] = args.job_name
+
 connection.login()
 
 try:
     j = Job.submit(connection, **payload)
     print "Job: %s[%s] was submitted." % (j.job_id, j.array_index)
-except Exception as e:
+except RemoteException as e:
+    print "Error: %s" % e.message
+except KeyError as e:
     print e.read()
 
 
