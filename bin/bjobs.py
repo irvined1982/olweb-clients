@@ -25,21 +25,7 @@ import sys
 def print_long():
     for job in jobs:
         print
-        status = job.status.name
-        if status == "JOB_STAT_RUN":
-            status = "RUN"
-        elif status == "JOB_STAT_PEND":
-            status = "PEND"
-        elif status == "JOB_STAT_DONE":
-            status = "DONE"
-        elif status == "JOB_STAT_EXIT":
-            status = "EXIT"
-        elif status == "JOB_STAT_USUSP":
-            status = "USUSP"
-        elif status == "JOB_STAT_SSUSP":
-            status = "SSUSP"
-        else:
-            status = "UNKNOWN"
+        status = job.status.friendly
         job_id = job.job_id
         if job.array_index != 0:
             job_id = "%s[%s]" % (job.job_id, job.array_index)

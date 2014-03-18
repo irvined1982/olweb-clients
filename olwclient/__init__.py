@@ -855,7 +855,7 @@ User given priority for the job
 
     @property
     def submit_time_datetime(self):
-        return datetime.datetime.fromtimestamp(self.submit_time)
+        return datetime.datetime.utcfromtimestamp(self.submit_time)
 
     @property
     def queue(self):
