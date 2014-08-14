@@ -749,7 +749,7 @@ User given priority for the job
             'num_processors',
             'max_num_processors',
             'queue_name',
-            'project_name'
+            'project_name',
             'job_name',
         ]
 
