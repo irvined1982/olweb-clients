@@ -748,7 +748,8 @@ User given priority for the job
             'command',
             'num_processors',
             'max_num_processors',
-            'queue_name'
+            'queue_name',
+            'project_name'
         ]
 
         for k in kwargs.keys():
