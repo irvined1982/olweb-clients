@@ -750,6 +750,7 @@ User given priority for the job
             'max_num_processors',
             'queue_name',
             'project_name'
+            'job_name',
         ]
 
         for k in kwargs.keys():
