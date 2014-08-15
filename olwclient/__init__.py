@@ -129,8 +129,11 @@ need a different method of authentication
             self._opener.addheaders = headers
 
         self._referer = request.get_full_url()
-        return self._opener.open(request)
-
+        try:
+            return self._opener.open(request)
+        except urllib2.HTTPError as e:
+            print e.read()
+            raise
     def open(self, request):
         """Opens a request to the server.
 
@@ -741,6 +744,20 @@ User given priority for the job
 
     @classmethod
     def submit(cls, connection, **kwargs):
+        """
+        Submits a job into the remote cluster using the supplied connection object.
+
+        :param connection:  Active Connection object.
+        :param options: options
+        :param options2: options2
+        :param command: The command to execute
+        :param num_processors: The number of processors to consume
+        :param num_processors: The Maximum number of processors to consume
+        :param queue_name: The queue to submit to.
+        :param project_name: The name of the project to submit to.
+        :param job_name: The name to give the job.
+        :return:
+        """
         connection.login()
         allowed_keys = [
             'options',
@@ -764,7 +781,9 @@ User given priority for the job
         data = json.loads(data)
         if 'status' in data and data['status'] == 'Fail':
             raise RemoteException(data)
-        return Job(connection, data=data)
+        if isinstance(data, list):
+            print data
+            return [Job(connection, data=i) for i in data]
 
     @classmethod
     def get_job_list(cls, connection, user_name=None, job_state="ACT", host_name=None, queue_name=None, job_name=None):
