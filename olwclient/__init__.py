@@ -21,18 +21,31 @@ import urllib2
 import cookielib
 import urllib
 import datetime
-import re
+import logging
+
+import tempfile
+
+class RemoteServerError(Exception):
+    """
+    Raised when the remote server is not found, fails, or otherwise does not behave in a standard way
+    for example when giving err 500
+
+    """
 
 
-class AuthenticationError(Exception):
-    """Raised when the client is unable to authenticate to the server"""
+class AuthenticationError(RemoteServerError):
+    """
+    Raised when the client is unable to authenticate to the server
+
+    """
     pass
+
 
 
 class OpenLavaConnection(object):
     """
     Connection and authentication handler for dealing with the server.  Subclass this when you
-need a different method of authentication
+    need a different method of authentication
     """
 
     @classmethod
@@ -74,10 +87,12 @@ need a different method of authentication
 
     @property
     def authenticated(self):
-        """True if the connection is currently authenticated
+        """
+        True if the connection is currently authenticated
 
         :returns: True if the connection is currently authenticated
         :rtype: Boolean
+
         """
         for c in self._cookies:
             if c.name == 'sessionid':
@@ -85,7 +100,8 @@ need a different method of authentication
         return False
 
     def login(self):
-        """Logs the user into the server.
+        """
+        Logs the user into the server.
 
         :raise: AuthenticationError if the user cannot be authenticated
         """
@@ -93,33 +109,40 @@ need a different method of authentication
             'username': self.username,
             'password': self.password,
         }
-        data = json.dumps(data)
+        data = json.dumps(data, sort_keys=True, indent=4)
+        print data
         url = self.url + "/accounts/ajax_login"
         req = urllib2.Request(url, data, {'Content-Type': 'application/json'})
-        f = self._open(req)
-        data = json.loads(f.read())
-        f.close()
+        self._open(req)
 
         if not self.authenticated:
             raise AuthenticationError(data['description'])
 
         url = self.url + "/get_token"
         req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
-        f = self._open(req)
-        data = json.loads(f.read())
+        data = self._open(req)
         self._csrf_token = data['cookie']
-        found=False
+        found = False
         for h in self._opener.addheaders:
             if h[0] == 'X-CSRFToken':
                 found = True
         if not found:
-            self._opener.addheaders.append( ('X-CSRFToken', self._csrf_token) )
-        f.close()
+            self._opener.addheaders.append(('X-CSRFToken', self._csrf_token))
+
 
     def _open(self, request):
+        """
+        Open a connection to the server, get and parse the response.
+
+        :param request: urllib request object
+        :return: deserialized response from server.
+        :raises: RemoteServerError
+        :raises: AuthenticationError
+
+        """
 
         if self._referer:
-            headers=[]
+            headers = []
             for h in self._opener.addheaders:
                 if h[0] == 'Referer':
                     continue
@@ -130,17 +153,58 @@ need a different method of authentication
 
         self._referer = request.get_full_url()
         try:
-            return self._opener.open(request)
+            response = self._opener.open(request)
+
+            # Check the content type is correct
+            for header in response.info().headers:
+                if header.startswith("Content-Type") and not header.startswith("Content-Type: application/json"):
+                    raise RemoteServerError("Expected a content_type of application/json however the header was: %s" % header)
+
+            data = json.load(response)
+            print json.dumps(data, sort_keys=True, indent=4)
+            # Close connection, no longer required.
+            response.close()
+
+            if not "status" in data:
+                raise RemoteServerError("Response did not contain status attribute")
+
+            if not "message" in data:
+                raise RemoteServerError("Response did not contain message attribute")
+
+            if not "data" in data:
+                raise RemoteServerError("Response did not contain data attribute")
+
+            if data['status'] != "OK":
+                raise RemoteServerError("The operation failed: %s" % data['message'])
+
+            # TODO: Check the error and raise the correct exception if required
+
+            return data['data']
+
         except urllib2.HTTPError as e:
-            print e.read()
+            if e.code == 404:
+                raise RemoteServerError("Invalid server URL, or misconfigured web server")
+            if e.code == 403:
+                try:
+                    data = json.load(e)
+                    print json.dumps(data, sort_keys=True, indent=4)
+                    raise AuthenticationError(data['message'])
+                except AttributeError:
+                    raise AuthenticationError("Unknown authentication failure, check server logs")
+            if e.clode == 500:
+                f = tempfile.NamedTemporaryFile()
+                f.write(e.read())
+                raise RemoteServerError("Server returned error 500, output stored in: %s" % f.name )
             raise
+
     def open(self, request):
-        """Opens a request to the server.
+        """
+        Authenticates if required using login, then calls _open to make the connection and get the data.
 
         :param urllib2.Request request: Request object with appropriate URL configured
-        :returns: HTtp Response object
-        :rtype: HTTPResponse
-        :raise: URLError on exception
+        :returns: deserialized data returned from server
+        :rtype: object
+
         """
 
         if not self.authenticated:
@@ -182,6 +246,7 @@ class OpenLavaObject(object):
                 raise NoSuchObjectError(url)
             else:
                 raise
+
 
 
 class Host(OpenLavaObject):
@@ -338,7 +403,8 @@ Total slots consumed on the host
 
     @classmethod
     def get_hosts_by_names(cls, connection, host_names):
-        """Return a list of Host objects that are in host_names
+        """
+        Return a list of Host objects that are in host_names
 
         :param list host_names: List of hostnames to get
         :returns: List of Host objects
@@ -383,7 +449,7 @@ Total slots consumed on the host
                     raise
         if not isinstance(data, dict):
             raise ValueError("Data must be a dict")
-        if data['type'] != "Host":
+        if data['type'] not in ["Host", "ExecutionHost"]:
             raise ValueError("data is not of type Host")
         OpenLavaObject.__init__(self, connection, data=data)
         self.resources = [Resource(self._connection, data=res) for res in self.resources]
@@ -448,7 +514,12 @@ Full name of the status
 Numeric code of the status
 
     """
-    pass
+    def __str__(self):
+        return self.friendly
+
+    def __unicode__(self):
+        return u"%s" % self.friendly
+
 
 
 class Resource(OpenLavaObject):
@@ -558,333 +629,8 @@ Process ID of the process
     pass
 
 
-class Job(OpenLavaObject):
-    """Get information about, and manipulate jobs on remote server.
 
-.. py:attribute:: admins
 
-List of user names that have administrative rights on this host.
-
-:returns: list of user names
-:rtype: list of str
-
-.. py:attribute:: array_index
-
-The array index of the job, 0 for non-array jobs.
-
-.. py:attribute:: begin_time
-
-Earliest time (Epoch UTC) that the job may begin
-
-.. py:attribute:: checkpoint_directory
-
-Data where checkpoint data will be written to.
-
-.. py:attribute:: checkpoint_period
-
-Time between checkpointing operations
-
-.. py:attribute:: command
-
-Command to execute
-
-.. py:attribute:: consumed_resources
-
-List of ConsumedResource objects
-
-.. py:attribute:: cpu_factor
-
-.. py:attribute:: cpu_time
-
-.. py:attribute:: cwd
-
-Current Working Directory of the job
-
-.. py:attribute:: dependency_condition
-
-Dependency conditions that must be met before the job will be dispatched
-
-.. py:attribute:: email_user
-
-User to email job notifications to
-
-.. py:attribute:: end_time
-
-Time job ended. (Epoch UTC)
-
-.. py:attribute:: error_file_name
-
-.. py:attribute:: execution_cwd
-
-.. py:attribute:: execution_home_directory
-
-.. py:attribute:: execution_hosts
-
-List of host objects that are executing the job
-
-.. py:attribute:: execution_user_id
-
-User ID under which the job is executing
-
-.. py:attribute:: execution_user_name
-
-User name under which the job is executing
-
-.. py:attribute:: host_specification
-.. py:attribute:: input_file_name
-.. py:attribute:: is_completed
-
-True if the job completed
-
-.. py:attribute:: is_failed
-
-True if the job failed
-
-.. py:attribute:: is_pending
-
-True if the job is pending
-
-.. py:attribute:: is_running
-
-True if the job is running
-
-.. py:attribute:: is_suspended
-
-True if the job is suspended
-
-.. py:attribute:: job_id
-
-ID of the job
-
-.. py:attribute:: login_shell
-
-.. py:attribute:: max_requested_slots
-
-.. py:attribute:: name
-
-.. py:attribute:: options
-
-List of JobOptions for the job
-
-.. py:attribute:: output_file_name
-
-.. py:attribute:: parent_group
-
-.. py:attribute:: pending_reasons
-
-.. py:attribute:: pre_execution_command
-
-.. py:attribute:: predicted_start_time
-
-.. py:attribute:: priority
-
-.. py:attribute:: process_id
-
-.. py:attribute:: processes
-
-.. py:attribute:: project_names
-
-.. py:attribute:: requested_hosts
-
-.. py:attribute:: requested_resources
-
-.. py:attribute:: requested_slots
-
-.. py:attribute:: reservation_time
-
-.. py:attribute:: resource_usage_last_update_time
-
-Last time resource usage was updated (Epoch UTC)
-
-.. py:attribute:: runtime_limits
-
-List of runtime limits
-
-.. py:attribute:: service_port
-
-NIOS Service port
-
-.. py:attribute:: start_time
-
-Time job started (Epoch UTC)
-
-.. py:attribute:: status
-
-Job Status object
-
-.. py:attribute:: submission_host
-
-Host where job was submitted
-
-.. py:attribute:: submit_home_directory
-
-Home directory on submission host.
-
-.. py:attribute:: submit_time
-
-Job submit time (Epoch UTC)
-
-.. py:attribute:: suspension_reasons
-
-.. py:attribute:: termination_signal
-
-.. py:attribute:: termination_time
-
-Termination deadline in seconds. (Epoch UTC)
-.. py:attribute:: user_name
-
-User name of job submitter
-
-.. py:attribute:: user_priority
-
-User given priority for the job
-
-
-    """
-
-    @classmethod
-    def submit(cls, connection, **kwargs):
-        """
-        Submits a job into the remote cluster using the supplied connection object.
-
-        :param connection:  Active Connection object.
-        :param options: options
-        :param options2: options2
-        :param command: The command to execute
-        :param num_processors: The number of processors to consume
-        :param num_processors: The Maximum number of processors to consume
-        :param queue_name: The queue to submit to.
-        :param project_name: The name of the project to submit to.
-        :param job_name: The name to give the job.
-        :return:
-        """
-        connection.login()
-        allowed_keys = [
-            'options',
-            'options2',
-            'command',
-            'num_processors',
-            'max_num_processors',
-            'queue_name',
-            'project_name',
-            'job_name',
-        ]
-
-        for k in kwargs.keys():
-            if k not in allowed_keys:
-                raise ValueError("Argument: %s is not valid" % k)
-
-        data = json.dumps(kwargs)
-        url = connection.url + "/job/submit"
-        request = urllib2.Request(url, data, {'Content-Type': 'application/json'})
-        data = connection.open(request).read()
-        data = json.loads(data)
-        if 'status' in data and data['status'] == 'Fail':
-            raise RemoteException(data)
-        if isinstance(data, list):
-            print data
-            return [Job(connection, data=i) for i in data]
-
-    @classmethod
-    def get_job_list(cls, connection, user_name=None, job_state="ACT", host_name=None, queue_name=None, job_name=None):
-        url = connection.url + "/jobs/"
-        if user_name == "all":
-            user_name = None
-
-        params = {
-            "queue_name": queue_name,
-            "job_name": job_name,
-            "host_name": host_name,
-            "job_state": job_state,
-            "user_name": user_name,
-        }
-        for k, v in params.items():
-            if v == None:
-                del (params[k])
-
-        url += "?" + urllib.urlencode(params)
-        request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
-        try:
-            data = connection.open(request).read()
-            data = json.loads(data)
-            if not isinstance(data, list):
-                print "Got strange data back"
-                data = []
-            return [cls(connection, data=i) for i in data]
-        except:
-            raise
-
-    def __init__(self, connection, job_id=None, array_id=None, data=None):
-        if job_id != None:
-            if array_id == None:
-                array_id = 0
-            url = connection.url + "/job/%s/%s" % (job_id, array_id)
-            req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
-            try:
-                data = connection.open(req).read()
-                data = json.loads(data)
-            except urllib2.HTTPError as e:
-                if e.code == 404:
-                    raise NoSuchObjectError("No such job: %s" % job_id)
-                else:
-                    raise
-
-        if not isinstance(data, dict):
-            raise ValueError("Data must be a dict")
-        if data['type'] != "Job":
-            raise ValueError("data is not of type Job")
-        self._queue = data['queue']
-        del (data['queue'])
-        self._submission_host = data['submission_host']
-        del (data['submission_host'])
-
-        OpenLavaObject.__init__(self, connection, data=data)
-        self.consumed_resources = [ConsumedResource(self._connection, data=d) for d in self.consumed_resources]
-        self.execution_hosts = [Host(self._connection, host_name=d['name']) for d in self.execution_hosts]
-        self.options = [JobOption(self._connection, data=d) for d in self.options]
-        self.processes = [Process(self._connection, data=d) for d in self.processes]
-        self.status = Status(self._connection, data=self.status)
-
-    def kill(self):
-        """Kills the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
-
-        :raise: RemoteException on failure
-        """
-        self._exec_remote("/job/%s/%s/kill" % (self.job_id, self.array_index))
-
-    def resume(self):
-        """Resumes the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
-
-        :raise: RemoteException on failure
-        """
-        self._exec_remote("/job/%s/%s/resume" % (self.job_id, self.array_index))
-
-    def requeue(self):
-        """Requeues the job.  The user must be a job owner,  queue or cluster administrator for this operation to succeed.
-
-        :raise: RemoteException on failure
-        """
-        self._exec_remote("/job/%s/%s/requeue" % (self.job_id, self.array_index))
-
-    def stop(self):
-        """Suspends the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
-
-        :raise: RemoteException on failure
-        """
-        self._exec_remote("/job/%s/%s/stop" % (self.job_id, self.array_index))
-
-
-    @property
-    def submit_time_datetime(self):
-        return datetime.datetime.utcfromtimestamp(self.submit_time)
-
-    @property
-    def queue(self):
-        return Queue(self._connection, queue_name=self._queue['name'])
-
-    @property
-    def submission_host(self):
-        return Host(self._connection, host_name=self._submission_host['name'])
 
 
 class Queue(OpenLavaObject):
@@ -950,7 +696,7 @@ String of time windows that the queue will dispatch during.  Empty of always ope
 
 Returns true if the queue is open and accepting new jobs
 
-.. py:attribute:: is_despatching_jobs
+.. py:attribute:: is_dispatching_jobs
 
 Returns true if the queue is actively dispatching new jobs
 
@@ -1202,4 +948,713 @@ Total number of slots consumed by jobs in the queue.
         self._exec_remote("/queues/%s/activate" % self.name)
 
 
-__ALL__ = [OpenLavaConnection, AuthenticationError, RemoteException, NoSuchObjectError, Host, Job]
+class ExecutionHost(Host):
+    """
+    Execution Hosts are hosts that are executing jobs, a subclass of Host, they have the additional num_slots attribute
+    indicating how many slots (Processors) are allocated to the job.
+
+    """
+    def __init__(self, connection, host_name=None, data=None, num_slots=1):
+        """
+        Accepts the additional optional argument num_slots_for_job (default 1) that indicates how many slots are allocated.
+
+        Otherwise functions identically to Host().
+
+        :param host_name: The host name of the host.
+        :param num_slots_for_job: The number of slots that are allocated to the job.
+        :return: ExecutionHost()
+
+        """
+        super(ExecutionHost, self ).__init__(connection, host_name=host_name, data=data)
+        self.num_slots = num_slots
+
+
+
+
+class Job(OpenLavaObject):
+    """
+    Get information about, and manipulate jobs on remote server.
+
+    .. py:attribute:: cluster_type
+
+        The type of cluster, defines the scheduling environment being used under the hood.
+
+        :return: Scheduler type
+        :rtype: str
+
+    .. py:attribute:: array_index
+
+        The array index of the job, 0 for non-array jobs.
+
+        :return: Array Index
+        :rtype: int
+
+    .. py:attribute:: job_id
+
+        Numerical Job ID of the job, not including the array index.
+
+        :return: Job ID
+        :rtype: int
+
+    .. py:attribute:: admins
+
+        List of user names that have administrative rights on this host.
+
+        :returns: list of user names
+        :rtype: list
+
+    .. py:attribute:: begin_time
+
+        Earliest time (Epoch UTC) that the job may begin.  Job will not start before this time
+
+        :return: Earliest start time of the job as integer since the Epoch (UTC)
+        :rtype: int
+
+    .. py:attribute:: command
+
+        Command to execute
+
+        :return: Command as string
+        :rtype: str
+
+    .. py:attribute:: consumed_resources
+
+        List of ConsumedResource objects
+
+        :return: List of ConsumedResource Objects
+        :rtype: list
+
+    .. py:attribute:: cpu_time
+
+        CPU Time in seconds that the job has consumed
+
+        :return: CPU time in seconds
+        :rtype: int
+
+
+    .. py:attribute:: dependency_condition
+
+        Dependency conditions that must be met before the job will be dispatched
+
+        :return: Job dependency information
+        :rtype: str
+
+
+    .. py:attribute:: email_user
+
+        User to email job notifications to if set.
+
+        :return: User email address, may be ""
+        :rtype: str
+
+    .. py:attribute:: end_time
+
+        Time the job ended in seconds since epoch UTC.
+
+        :return: Number of seconds since epoch (UTC) when the job exited.
+        :rtype: int
+
+    .. py:attribute:: error_file_name
+
+        Path to the job error file, may be ""
+
+        :returns: Path of the job error file.
+        :rtype: str
+
+    .. py:attribute:: execution_hosts
+
+        List of host objects that are executing the job.  If the job is not executing, will be an empty list.
+
+        :returns: List of host objects
+        :rtype: list
+
+    .. py:attribute:: input_file_name
+
+    Path to the job input file, may be ""
+
+        :returns: Path of the job input file.
+        :rtype: str
+
+    .. py:attribute:: is_completed
+
+        True if the job completed without failure.  For this to be true, the job must have returned exit status zero,
+        and must not have been killed by the user or an admin.
+
+        :return: True if job has completed without error.
+        :rtype: bool
+
+    .. py:attribute:: was_killed
+
+        True if the job was killed by the owner or an admin.
+
+        :return: True if the job was killed
+        :rtype: bool
+
+    .. py:attribute:: is_failed
+
+        True if the exited due to failure.  For this to be true, the job must have returned a non zero exit status, and
+        must not have been killed by the user or admin.
+
+        :return: True if the job failed
+        :rtype: bool
+
+    .. py:attribute:: is_pending
+
+        True if the job is pending.
+
+        :return: True if the job is pending
+        :rtype: bool
+
+    .. py:attribute:: is_running
+
+        True if the job is running.  For this to be true, the job must currently be executing on compute nodes and the job
+        must not be suspended.
+
+        :return: True if the job is executing
+        :rtype: bool
+
+    .. py:attribute:: is_suspended
+
+        True if the job is suspended.  For this to be true, the job must have been suspended by the system, an administrator
+        or the job owner.  The job may have been suspended whilst executing, or whilst in a pending state.
+
+        :return: True if the job is suspended
+        :rtype: bool
+
+    .. py:attribute:: max_requested_slots
+
+        The maximum number of slots that this job will execute on.  If the user requested a range of slots to consume, this
+        is set to the upper bound of that range.
+
+        :return: Maximum number of slots requested
+        :rtype: int
+
+    .. py:attribute:: name
+
+        The name given to the job by the user or scheduling system. May be "".
+
+        :return: Name of job
+        :rtype: str
+
+    .. py:attribute:: options
+
+        List of JobOptions for the job
+
+        :return: List of JobOptions
+        :rtype: list
+
+    .. py:attribute:: output_file_name
+
+        Path to the job output file, may be ""
+
+        :returns: Path of the job output file.
+        :rtype: str
+
+    .. py:attribute:: pending_reasons
+
+        Text string explainging why the job is pending.
+
+        :return: Reason why the job is pending.
+        :rtype: str
+
+    .. py:attribute:: predicted_start_time
+
+        The time the job is predicted to start, in seconds since EPOCH. (UTC)
+
+        :return: The predicted start time
+        :rtype: int
+
+    .. py:attribute:: priority
+
+        The priority given to the job by the user, this may have been modified by the scheduling environment, or an
+        administrator.
+
+        :return: Priority
+        :rtype: int
+
+    .. py:attribute:: process_id
+
+        The numeric process ID of the primary process associated with this job.
+
+        :return: Process ID
+        :rtype: int
+
+    .. py:attribute:: processes
+
+        Array of process objects for each process  started by the job.
+
+        :return: Array of Process objects
+        :rtype: list
+
+    .. py:attribute:: project_names
+
+        Array of project names that the job was submitted with.
+
+        :return: Project Names
+        :rtype: list of str
+
+    .. py:attribute:: requested_resources
+
+        Resource string requested by the user.  This may be have been modified by the scheduler, or an administrator.
+
+        :return: Resource Requirements
+        :rtype: str
+
+    .. py:attribute:: requested_slots
+
+        The number of job slots requested by the job
+
+        :return: Slots requested
+        :rtype: int
+
+    .. py:attribute:: reservation_time
+
+        The time when the slots for this job were reserved.  Time is in seconds since Epoch (UTC)
+
+        :return: Time when slots were reserved.
+        :rtype: int
+
+    .. py:attribute:: runtime_limits
+
+        Array of run time limits imposed on the job.  May have been modified by the scheduler or an administrator.
+
+        :returns: Resource Limits
+        :rtype: list of ResourceLimit objects
+
+    .. py:attribute:: start_time
+
+        The time time the job started in seconds since Epoch. (UTC)
+
+        :returns: Job Start Time
+        :rtype: int
+
+    .. py:attribute:: status
+
+        Job Status object that defines the current status of the job.
+
+        :return: Job Status
+        :rtype: JobStatus
+
+    .. py:attribute:: submit_time
+
+        The time the job was submitted in seconds since Epoch. (UTC)
+
+        :returns: Job Submit Time
+        :rtype: int
+
+    .. py:attribute:: suspension_reasons
+
+        Text string explaining why the job is suspended.
+
+        :return: Reason why the job is suspended.
+        :rtype: str
+
+    .. py:attribute:: termination_time
+
+        Termination deadline in seconds since the Epoch. (UTC)  The job will be terminated if it is not finished by
+        this time.
+
+        :return: Job termination time
+        :rtype: int
+
+    .. py:attribute:: user_name
+
+        User name of the job owner.
+
+        :return: Username
+        :rtype: str
+
+    .. py:attribute:: user_priority
+
+        User given priority for the job.  This may have been modified by the scheduling system or an administrator.
+
+        :return: priority
+        :rtype: int
+
+
+    .. py:attribute:: requested_hosts
+
+        An array of Host objects corresponding the the hosts that the user requested for this job.  If the user did
+        not request any hosts, then the list will be empty.
+
+        :return: List of requested hosts
+        :rtype: list
+
+    .. py:attribute:: checkpoint_directory
+
+        Path to directory where checkpoint data will be written to.
+
+        :return: path to checkpoint directory
+        :rtype: str
+
+    .. py:attribute:: checkpoint_period
+
+        Number of seconds between checkpoint operations
+
+        :return: Number of seconds between checkpoints
+        :rtype: int
+
+    .. py:attribute:: cpu_factor
+
+        CPU Factor of execution host
+
+        :return: CPU Factor
+        :rtype: float
+
+    .. py:attribute:: cwd
+
+        Current Working Directory of the job
+
+        :return: Current Working Directory
+        :rtype: str
+
+    .. py:attribute:: execution_cwd
+
+        Current working directory on the execution host
+
+        :return: CWD on exec host
+        :rtype: str
+
+    .. py:attribute:: execution_home_directory
+
+        The home directory of the user on the execution host.
+
+        :return Home Directory
+        :rtype: str
+
+    .. py:attribute:: execution_user_id
+
+        User ID of the user used to execute the job on the execution host.
+
+        :return: Numerical ID of the user
+        :rtype: int
+
+    .. py:attribute:: execution_user_name
+
+        User name of the user used to execute the job on the execution host.
+
+        :return: name of the user
+        :rtype: str
+
+    .. py:attribute:: host_specification
+
+    A hostname or model name that describes the specification of the host being used to execute the job.
+
+        :return: Host Specification
+        :rtype: str
+
+    .. py:attribute:: login_shell
+
+        The shell used when running the job.  If not used, or not specified will be ""
+
+        :return: Login Shell
+        :rtype: str
+
+    .. py:attribute:: parent_group
+
+        The parent Job Group, if not used will be ""
+
+        :return: Parent Job Group
+        :rtype: str
+
+    .. py:attribute:: pre_execution_command
+
+        Pre Execution Command specified by the user, if this is not supplied, will be ""
+
+        :return: Pre Execution Command
+        :rtype: str
+
+    .. py:attribute:: resource_usage_last_update_time
+
+        The time the resource usage information was last updated in seconds since Epoch. (UTC)
+
+        :return: resource usage update time
+        :rtype: int
+
+    .. py:attribute:: service_port
+
+        NIOS Port of the job
+
+        :return: NIOS Port
+        :rtype: int
+
+    .. py:attribute:: submit_home_directory
+
+        Home directory on the submit host of the user used to execute the job
+
+        :return: Home Directory
+        :rtype str
+
+    .. py:attribute:: termination_signal
+
+        Signal to send when job exceeds termination deadline.
+
+        :return: Termination Signal
+        :rtype: int
+
+    """
+
+    @property
+    def submit_time_datetime(self):
+        """
+        The submit time as a datetime object (UTC)
+
+        :return: submit time
+        :rtype: datetime
+
+        """
+        return datetime.datetime.utcfromtimestamp(self.submit_time)
+
+    @property
+    def queue(self):
+        """
+        The queue object that this job is currently in.  This may have been modified by the scheduling system, or an
+        administrator.
+
+        :return: Queue object that the job is in.
+        :rtype: Queue
+
+        """
+        return Queue(self._connection, queue_name=self._queue['name'])
+
+    @property
+    def submission_host(self):
+        """
+
+        Host object corresponding to the host that the job was submitted from.
+
+        :return: Submit Host object
+        :rtype: Host
+
+        """
+        return Host(self._connection, host_name=self._submission_host['name'])
+
+    def __init__(self, connection, job_id=None, array_index=None, data=None):
+        """
+        Creates a new instance of the job class.
+
+        :param connection: Connection object to user to get data
+        :param data:
+
+            If defined, contains the data as a dictionary from the remote server.  Default: Undefined, used only
+            internally.
+
+        :param job_id: Numeric Job ID.
+        :param array_index: Array index of the job.
+
+        When job is None (Default) then makes a connection to the openlava server using the connection object, and
+        requests information about the job with the specified job_id and array index.  If the job exists, then the
+        job is created and returned.  If the job doesnt exist, or there is an error with the API call, an exception
+        is raised.
+
+        :raises NoSuchJobError: When the job doesnt exist
+
+        """
+        if job_id is not None:
+            if array_index is None:
+                array_index = 0
+            url = connection.url + "/job/%s/%s" % (job_id, array_index)
+            req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
+            try:
+                data = connection.open(req).read()
+                data = json.loads(data)['data']
+            except urllib2.HTTPError as e:
+                if e.code == 404:
+                    raise NoSuchJobError("No such job: %s" % job_id)
+                else:
+                    raise
+
+        if not isinstance(data, dict):
+            raise ValueError("Data must be a dict")
+        if data['type'] != "Job":
+            raise ValueError("data is not of type Job")
+        self._queue = data['queue']
+        del (data['queue'])
+        self._submission_host = data['submission_host']
+        del (data['submission_host'])
+
+        OpenLavaObject.__init__(self, connection, data=data)
+        self.consumed_resources = [ConsumedResource(self._connection, data=d) for d in self.consumed_resources]
+        self.execution_hosts = [ExecutionHost(self._connection, host_name=d['name'], num_slots_for_job=d['num_slots']) for d in self.execution_hosts]
+        self.options = [JobOption(self._connection, data=d) for d in self.options]
+        self.processes = [Process(self._connection, data=d) for d in self.processes]
+        self.status = Status(self._connection, data=self.status)
+
+    def kill(self):
+        """
+        Kills the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
+
+        :return: None
+        :raise: RemoteException on failure
+        """
+        self._exec_remote("/job/%s/%s/kill" % (self.job_id, self.array_index))
+
+    def resume(self):
+        """
+        Resumes the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
+
+        :return: None
+        :raise: RemoteException on failure
+        """
+        self._exec_remote("/job/%s/%s/resume" % (self.job_id, self.array_index))
+
+    def requeue(self):
+        """
+        Requeues the job.  The user must be a job owner,  queue or cluster administrator for this operation to succeed.
+
+        :return: None
+        :raise: RemoteException on failure
+        """
+        self._exec_remote("/job/%s/%s/requeue" % (self.job_id, self.array_index))
+
+    def suspend(self):
+        """
+        Suspends the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
+
+        :return: None
+        :raise: RemoteException on failure
+        """
+        self._exec_remote("/job/%s/%s/suspend" % (self.job_id, self.array_index))
+
+    @classmethod
+    def submit(cls, connection, **kwargs):
+        """
+        Submits a job into the the remote cluster. Returns an array of Job objects.
+
+        :param connection:  Active Connection object.
+
+        :param options:
+            Numeric value to pass to the options of the scheduler.
+
+        :param options2:
+            Numeric value to pass to the options2 field of the scheduler.
+
+        :param command:
+            The command to execute
+
+        :param requested_hosts
+            A string containing the list of hosts separated by a space that the user wishes the job to run on.
+
+        :param max_requested_slots
+            Max number of slots to use
+
+        :param queue_name:
+            The name of the queue to submit the job into, if none, the default queue is used.
+
+        :param project_name
+            Name of project to submit to
+
+        :param job_name:
+            The name of the job.  If none, then no name is used.
+
+        :return:
+
+            List of Job objects.  If the job was an array job, then the list will contain multiple elements with the
+            same job id, but different array_indexes, if the job was not an array job, then the list will contain only
+            a single element.
+
+        """
+        connection.login()
+        allowed_keys = [
+            'options',
+            'options2',
+            'command',
+            'requested_slots',
+            'max_requested_slots',
+            'queue_name',
+            'project_name',
+            'job_name',
+        ]
+
+        for k in kwargs.keys():
+            if k not in allowed_keys:
+                raise ValueError("Argument: %s is not valid" % k)
+        logging.debug("Encoding Data")
+        data = json.dumps(kwargs)
+        logging.debug("Data Encoded")
+        url = connection.url + "/job/submit"
+        logging.debug("Sending to: %s" % url)
+        request = urllib2.Request(url, data, {'Content-Type': 'application/json'})
+        logging.debug("Openning Connection")
+        data = connection.open(request).read()
+        logging.debug("Read response, decoding")
+        data = json.loads(data)
+        logging.debug("Decoded")
+        if 'status' in data and data['status'] == 'Fail':
+            raise RemoteException(data)
+        if isinstance(data, list):
+            return [Job(connection, data=i) for i in data]
+
+    @classmethod
+    def get_job_list(cls, connection, job_id=0, array_index=-1, queue_name=None, host_name=None, user_name="all", job_state="ACT", job_name=None):
+        """
+        Returns a list of jobs that match the specified criteria.
+
+        :param connection:  Connection object to use to get data
+         :param job_id:
+            The numeric Job ID, if this is specified, then queue_name, host_name, user_name, and job_state are
+            ignored.
+
+        :param array_index:
+            The array index of the job.  If array_index is -1, then all array tasks from the corresponding job ID are
+            returned.  If array_index is not zero, then a job_id must also be specified.
+
+        :param queue_name:
+            The name of the queue.  If specified, implies that job_id and array_index are set to default.  Only returns
+            jobs that are submitted into the named queue.
+
+        :param host_name:
+            The name of the host.  If specified, implies that job_id and array_index are set to default.  Only returns
+            jobs that are executing on the specified host.
+
+        :param user_name:
+            The name of the user.  If specified, implies that job_id and array_index are set to default.  Only returns
+            jobs that are owned by the specified user.
+
+        :param job_state:
+            Only return jobs in this state, state can be "ACT" - all active jobs, "ALL" - All jobs, including finished
+            jobs, "EXIT" - Jobs that have exited due to an error or have been killed by the user or an administator,
+            "PEND" - Jobs that are in a pending state, "RUN" - Jobs that are currently running, "SUSP" Jobs that are
+            currently suspended.
+
+        :param job_name:
+            Only return jobs that are named job_name.
+
+        :return: Array of Job objects.
+        :rtype: list
+
+        """
+
+        if job_id != 0 and array_index == -1:
+            logging.debug("Getting info for elements in job.")
+            url = connection.url + "/jobs/%d" % job_id
+        else:
+            logging.debug("Getting info for all jobs")
+            if user_name == "all":
+                user_name = None
+            params = {
+                "queue_name": queue_name,
+                "job_name": job_name,
+                "host_name": host_name,
+                "job_state": job_state,
+                "user_name": user_name,
+            }
+            for k, v in params.items():
+                if v is None:
+                    del (params[k])
+            url = connection.url + "/jobs?" + urllib.urlencode(params)
+        logging.debug("Sending request")
+        request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
+        logging.debug("Opening Connection")
+        data = connection.open(request).read()
+        logging.debug("Got data back")
+        data = json.loads(data)
+        if not isinstance(data['data'], list):
+            raise ValueError("Got unexpected data from server: %s" % data)
+        return [cls(connection, data=i) for i in data['data']]
+
+
+
+
+
+__ALL__ = [OpenLavaConnection, AuthenticationError, RemoteException, NoSuchObjectError, Host, Job, ExecutionHost]
