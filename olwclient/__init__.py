@@ -25,6 +25,7 @@ import logging
 
 import tempfile
 
+
 class RemoteServerError(Exception):
     """
     Raised when the remote server is not found, fails, or otherwise does not behave in a standard way
@@ -39,7 +40,6 @@ class AuthenticationError(RemoteServerError):
 
     """
     pass
-
 
 
 class OpenLavaConnection(object):
@@ -110,7 +110,6 @@ class OpenLavaConnection(object):
             'password': self.password,
         }
         data = json.dumps(data, sort_keys=True, indent=4)
-        print data
         url = self.url + "/accounts/ajax_login"
         req = urllib2.Request(url, data, {'Content-Type': 'application/json'})
         self._open(req)
@@ -128,7 +127,6 @@ class OpenLavaConnection(object):
                 found = True
         if not found:
             self._opener.addheaders.append(('X-CSRFToken', self._csrf_token))
-
 
     def _open(self, request):
         """
@@ -158,10 +156,12 @@ class OpenLavaConnection(object):
             # Check the content type is correct
             for header in response.info().headers:
                 if header.startswith("Content-Type") and not header.startswith("Content-Type: application/json"):
-                    raise RemoteServerError("Expected a content_type of application/json however the header was: %s" % header)
+                    print response.read()
+                    raise RemoteServerError(
+                        "Expected a content_type of application/json however the header was: %s" % header)
 
             data = json.load(response)
-            print json.dumps(data, sort_keys=True, indent=4)
+
             # Close connection, no longer required.
             response.close()
 
@@ -187,14 +187,14 @@ class OpenLavaConnection(object):
             if e.code == 403:
                 try:
                     data = json.load(e)
-                    print json.dumps(data, sort_keys=True, indent=4)
+
                     raise AuthenticationError(data['message'])
                 except AttributeError:
                     raise AuthenticationError("Unknown authentication failure, check server logs")
-            if e.clode == 500:
-                f = tempfile.NamedTemporaryFile()
+            if e.code == 500:
+                f = tempfile.NamedTemporaryFile(delete=False)
                 f.write(e.read())
-                raise RemoteServerError("Server returned error 500, output stored in: %s" % f.name )
+                raise RemoteServerError("Server returned error 500, output stored in: %s" % f.name)
             raise
 
     def open(self, request):
@@ -212,41 +212,55 @@ class OpenLavaConnection(object):
         return self._open(request)
 
 
+class StatusType(object):
+    def __unicode__(self):
+        return u'%s' % self.friendly
+
+    def __repr__(self):
+        return u'%s' % self.name
+
+    def __str__(self):
+        return '%s' % self.friendly
+
+
 class OpenLavaObject(object):
-    """Base class for OpenLava objects, automatically populates attributes based on values returned from the server."""
+    """
+    Base class for OpenLava objects, automatically populates attributes based on values returned from
+    the server.
+
+    """
 
     def __init__(self, connection, data=None):
-        """Create a new instance of the class.
+        """
+        Create a new instance.
 
-        :param OpenLavaConnection connection: Connection object that will be used to connect to the server and retrieve data.
-        :param dict data: Optional dictionary containing pre-retrieved data from the server, this will be populated into the objects data structure
+        :param OpenLavaConnection connection:
+
+            Connection object that will be used to connect to the server and retrieve data.
+
+        :param dict data:
+
+            Optional dictionary containing pre-retrieved data from the server, this will be populated into
+            the objects data structure
 
         """
         self._connection = connection
-        if json:
+        if data is not None:
             if not isinstance(data, dict):
                 raise ValueError("Must be a dict")
             for k, v in data.iteritems():
                 setattr(self, k, v)
 
     def _exec_remote(self, url):
+        """
+        Open a url on the server, and get the result
+
+        :param url: URL to open
+        :return: Deserialized JSON response from server as object
+        """
         url = self._connection.url + url
         req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
-        try:
-            data = self._connection.open(req).read()
-            data = json.loads(data)
-            if not isinstance(data, dict):
-                raise ValueError("Invalid data returned")
-            if data['status'] == "Fail":
-                raise RemoteException(data)
-            else:
-                return data
-        except urllib2.HTTPError as e:
-            if e.code == 404:
-                raise NoSuchObjectError(url)
-            else:
-                raise
-
+        return self._connection.open(req)
 
 
 class Host(OpenLavaObject):
@@ -426,11 +440,7 @@ Total slots consumed on the host
         url = connection.url + "/hosts"
         request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
         try:
-            data = connection.open(request).read()
-            data = json.loads(data)
-            if not isinstance(data, list):
-                print "Got strange data back"
-                data = []
+            data = connection.open(request)
             return [Host(connection, data=i) for i in data]
         except:
             raise
@@ -439,14 +449,9 @@ Total slots consumed on the host
         if host_name:
             url = connection.url + "/hosts/%s?json=1" % host_name
             req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
-            try:
-                data = connection.open(req).read()
-                data = json.loads(data)
-            except urllib2.HTTPError as e:
-                if e.code == 404:
-                    raise NoSuchObjectError("No such host: %s" % host_name)
-                else:
-                    raise
+
+            data = connection.open(req)
+
         if not isinstance(data, dict):
             raise ValueError("Data must be a dict")
         if data['type'] not in ["Host", "ExecutionHost"]:
@@ -494,7 +499,7 @@ class RemoteException(Exception):
             setattr(self, k, v)
 
 
-class Status(OpenLavaObject):
+class Status(OpenLavaObject, StatusType):
     """Status of an object.
 
 .. py:attribute:: description
@@ -514,12 +519,6 @@ Full name of the status
 Numeric code of the status
 
     """
-    def __str__(self):
-        return self.friendly
-
-    def __unicode__(self):
-        return u"%s" % self.friendly
-
 
 
 class Resource(OpenLavaObject):
@@ -556,81 +555,305 @@ Ordering of the resource
 
 
 class ConsumedResource(OpenLavaObject):
-    """Resources consumed by a job.
+    """
+        .. py:attribute:: name
 
-.. py:attribute:: limit
+        The name of the consumed resource.
 
-Limit imposed by the scheduler on the resource
+        :return: name of resource
+        :rtype: str
 
-.. py:attribute:: name
+    .. py:attribute:: value
 
-Name of the resource
+        The current value of the consumed resource.
 
-.. py:attribute:: unit
+        :return: value of resource
+        :rtype: str
 
-The units the resource is measured in
+    .. py:attribute:: limit
 
-.. py:attribute:: value
+        The limit specified for the resource, may be None, if the resource does not have a limit.
 
-The value of the consumed resource
+        :return: limit of resource consumption
+        :rtype: str
+
+    .. py:attribute:: unit
+
+        The unit of measurement for the resource, may be None, if the unit cannot be determined.
+
+        :return: unit of measurement
+        :rtype: str
 
     """
-    pass
+
+    def __str__(self):
+        s = "%s: %s" % (self.name, self.value)
+        if self.unit:
+            s += "%s" % self.unit
+
+        if self.limit:
+            s += " (%s)" % self.limit
+
+        return s
+
+    def __unicode__(self):
+        return u"%s" % self.__str__()
+
+    def __repr__(self):
+        return self.__str__()
 
 
-class JobOption(OpenLavaObject):
-    """Option submitted with Job.
+class JobOption(OpenLavaObject, StatusType):
+    """
+    When a job is submitted, it may be submitted with options that define job behavior.   These may be to
+    define the job behavior such as host exclusivity, or to specify that other fields, such as job name have
+    been used.
 
-.. py:attribute:: description
+    .. py:attribute:: name
 
-Description of the option
+        Gets the name of the status, this is generally the name of the constant defined in the Openlava header
+        file.
 
-.. py:attribute:: friendly
+        :return: Status Name
+        :rtype: str
 
-Friendly name for the option
+    .. py:attribute:: description
 
-.. py:attribute:: name
+        Gets the description of the status, this is the human readable description of the status, it is generally
+        the human readable description defined in the `Openlava <http://www.openlava.org/>`_ header file.
 
-Full name of the option
+        .. note:
 
-.. py:attribute:: status
+            Descriptions may be empty.
 
-Numeric code of the option
+        :return: Description of the status.
+        :rtype: str
+
+    .. py:attribute:: status
+
+        Returns the status code, this is the numeric value of the code. This is generally the value of the constant
+        defined in the `Openlava <http://www.openlava.org/>`_ header file.
+
+        :return: The status code
+        :rtype: int
+
+
+    .. py:attribute:: friendly
+
+        A friendly name for the status, this is a short, human readable name.
+
+        :return: Human readable status name
+        :rtype: str
+
+    .. list-table:: Valid Statuses for Openlava Jobs
+        :header-rows: 1
+
+        * - Value
+          - Friendly Name
+          - Name
+          - Description
+        * - 0x01
+          - SUB_JOB_NAME
+          - Job submitted with name
+          - Submitted with a job name
+        * - 0x02
+          - SUB_QUEUE
+          - Job submitted with queue
+          -
+        * - 0x04
+          - SUB_HOST
+          - SUB_HOST
+          -
+        * - 0x08
+          - SUB_IN_FILE
+          - Job Submitted with input file
+          -
+        * - 0x10
+          - SUB_OUT_FILE
+          - Job submitted with output file
+          -
+        * - 0x20
+          - SUB_ERR_FILE
+          - Job submitted with error file
+          -
+        * - 0x40
+          - SUB_EXCLUSIVE
+          - Job submitted to run exclusively
+          -
+        * - 0x80
+          - SUB_NOTIFY_END
+          - SUB_NOTIFY_END
+          -
+        * - 0x100
+          - SUB_NOTIFY_BEGIN
+          - SUB_NOTIFY_BEGIN
+          -
+        * - 0x200
+          - SUB_USER_GROUP
+          - SUB_USER_GROUP
+          -
+        * - 0x400
+          - SUB_CHKPNT_PERIOD
+          - Job submitted with checkpoint period
+          -
+        * - 0x800
+          - SUB_CHKPNT_DIR
+          - Job submitted with checkpoint directory
+          -
+        * - 0x1000
+          - SUB_RESTART_FORCE
+          - SUB_RESTART_FORCE
+          -
+        * - 0x2000
+          - SUB_RESTART
+          - SUB_RESTART
+          -
+        * - 0x4000
+          - SUB_RERUNNABLE
+          - Job submitted as rerunnable
+          -
+        * - 0x8000
+          - SUB_WINDOW_SIG
+          - SUB_WINDOW_SIG
+          -
+        * - 0x10000
+          - SUB_HOST_SPEC
+          - Job submitted with host spec
+          -
+        * - 0x20000
+          - SUB_DEPEND_COND
+          - Job submitted with depend conditions
+          -
+        * - 0x40000
+          - SUB_RES_REQ
+          - Job submitted with resource request
+          -
+        * - 0x80000
+          - SUB_OTHER_FILES
+          - SUB_OTHER_FILES
+          -
+        * - 0x100000
+          - SUB_PRE_EXEC
+          - Job submitted with pre exec script
+          -
+        * - 0x200000
+          - SUB_LOGIN_SHELL
+          - Job submitted with login shell
+          -
+        * - 0x400000
+          - SUB_MAIL_USER
+          - Job submitted to email user
+          -
+        * - 0x800000
+          - SUB_MODIFY
+          - SUB_MODIFY
+          -
+        * - 0x1000000
+          - SUB_MODIFY_ONCE
+          - SUB_MODIFY_ONCE
+          -
+        * - 0x2000000
+          - SUB_PROJECT_NAME
+          - Job submitted to project
+          -
+        * - 0x4000000
+          - SUB_INTERACTIVE
+          - Job submitted as interactive
+          -
+        * - 0x8000000
+          - SUB_PTY
+          - SUB_PTY
+          -
+        * - 0x10000000
+          - SUB_PTY_SHELL
+          - SUB_PTY_SHELL
+          -
+      * - 0x01
+          - SUB2_HOLD
+          - SUB2_HOLD
+          -
+        * - 0x02
+          - SUB2_MODIFY_CMD
+          - SUB2_MODIFY_CMD
+          -
+        * - 0x04
+          - SUB2_BSUB_BLOCK
+          - SUB2_BSUB_BLOCK
+          -
+        * - 0x08
+          - SUB2_HOST_NT
+          - SUB2_HOST_NT
+          -
+        * - 0x10
+          - SUB2_HOST_UX
+          - SUB2_HOST_UX
+          -
+        * - 0x20
+          - SUB2_QUEUE_CHKPNT
+          - SUB2_QUEUE_CHKPNT
+          -
+        * - 0x40
+          - SUB2_QUEUE_RERUNNABLE
+          - SUB2_QUEUE_RERUNNABLE
+          -
+        * - 0x80
+          - SUB2_IN_FILE_SPOOL
+          - SUB2_IN_FILE_SPOOL
+          -
+        * - 0x100
+          - SUB2_JOB_CMD_SPOOL
+          - SUB2_JOB_CMD_SPOOL
+          -
+        * - 0x200
+          - SUB2_JOB_PRIORITY
+          - SUB2_JOB_PRIORITY
+          -
+        * - 0x400
+          - SUB2_USE_DEF_PROCLIMIT
+          - SUB2_USE_DEF_PROCLIMIT
+          -
+        * - 0x800
+          - SUB2_MODIFY_RUN_JOB
+          - SUB2_MODIFY_RUN_JOB
+          -
+        * - 0x1000
+          - SUB2_MODIFY_PEND_JOB
+          - SUB2_MODIFY_PEND_JOB
+          -
 
     """
-    pass
+
 
 
 class Process(OpenLavaObject):
-    """Process started by submitted job.
+    """
+    Processes represent executing processes that are part of a job.  Where supported the scheduler may
+    keep track of processes spawned by the job.  Information about the process is returned in Process
+    classes.
 
-.. py:attribute:: cray_job_id
+    .. py:attribute:: hostname
 
-Cray job ID of the process
+        The name of the host that the process is running on.  This may not be available if the scheduler does not
+        track which hosts start which process.
 
-.. py:attribute:: hostname
+    .. py:attribute:: process_id
 
-Hostname process was started on, may be None if unknown
+        The numerical ID of the running process.
 
-.. py:attribute:: parent_process_id
+    .. py:attribute:: extras
 
-Process ID of parent process.
+        A list of extra field names that are available
 
-.. py:attribute:: process_group_id
+    """
 
-Group ID of the process
+    def __str__(self):
+        return "%s:%s" % (self.hostname, self.process_id)
 
-.. py:attribute:: process_id
+    def __unicode__(self):
+        return u"%s" % self.__str__()
 
-Process ID of the process
-
-
-"""
-    pass
-
-
-
-
+    def __repr__(self):
+        return self.__str__()
 
 
 class Queue(OpenLavaObject):
@@ -868,7 +1091,7 @@ Total number of slots consumed by jobs in the queue.
             queues = cls.get_queue_list(connection)
         elif len(queue_names) == 0:
             raise NotImplementedError("Must check cluster for default queue")
-            #queues = [cls(connection, queue_name=socket.gethostname())]
+            # queues = [cls(connection, queue_name=socket.gethostname())]
         else:
             queues = [cls(connection, queue_name=queue_name) for queue_name in queue_names]
         return queues
@@ -950,34 +1173,114 @@ Total number of slots consumed by jobs in the queue.
 
 class ExecutionHost(Host):
     """
-    Execution Hosts are hosts that are executing jobs, a subclass of Host, they have the additional num_slots attribute
-    indicating how many slots (Processors) are allocated to the job.
+    Execution Hosts are hosts that are executing jobs, a subclass of :py:class:`cluster.openlavacluster.Host`,
+    they have the additional num_slots_for_job attribute indicating how many slots (Processors) are allocated
+    to the job.
+
+    .. py:attribute:: num_slots_for_job
+
+        The number of slots that are allocated to the job.
+
+        :return: Slots consumed by job
+        :rtype: int
 
     """
-    def __init__(self, connection, host_name=None, data=None, num_slots=1):
-        """
-        Accepts the additional optional argument num_slots_for_job (default 1) that indicates how many slots are allocated.
 
-        Otherwise functions identically to Host().
+    def __init__(self, connection, host_name=None, num_slots_for_job=None, data=None):
+        if host_name and num_slots_for_job:
+            Host.__init__(self, connection, host_name=host_name)
+            self.num_slots_for_job = num_slots_for_job
+        else:
+            self._connection = connection
+            self._url = data['url']
+            self._loaded_from_server = False
+            self.host_name = data['name']
+            self.name = data['name']
+            self.num_slots_for_job = data['num_slots']
 
-        :param host_name: The host name of the host.
-        :param num_slots_for_job: The number of slots that are allocated to the job.
-        :return: ExecutionHost()
+    def __getattr__(self, name):
+        if self._loaded_from_server:
+            raise AttributeError
+        else:
+            Host.__init__(self, self._connection, host_name=self.name)
+            self._loaded_from_server
+            if hasattr(self, name):
+                return getattr(self, name)
+            else:
+                raise AttributeError
 
-        """
-        super(ExecutionHost, self ).__init__(connection, host_name=host_name, data=data)
-        self.num_slots = num_slots
 
 
+    def __str__(self):
+        return "%s:%s" % (self.host_name, self.num_slots_for_job)
 
+    def __unicode__(self):
+        return u"%s" % self.__str__()
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class ResourceLimit(OpenLavaObject):
+    """
+    Resource limits are limits on the amount of resource usage of a Job, Queue, Host or User.  Resource
+    Limits may be specified by the user, or as an administator through the scheduler configuration.
+
+    .. py:attribute:: name
+
+        The name of the resource
+
+    .. py:attribute:: soft_limit
+
+        The soft limit of the resource, when this limit is reached, an action is performed on the job, usually
+        this is is in the form of a non-fatal signal being sent to the job.
+
+    .. py:attribute:: hard_limit
+
+        The hard limit of the resource, when this limit is reached, the job is terminated.
+
+    .. py:attribute:: description
+
+        A description of the resource limit
+
+    .. py:attribute:: unit
+
+        The unit of measurement
+
+    """
+
+    def __str__(self):
+        return "%s:%s (%s)" % (self.name, self.soft_limit, self.hard_limit)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __unicode__(self):
+        return u"%s" % self.__str__()
 
 class Job(OpenLavaObject):
     """
-    Get information about, and manipulate jobs on remote server.
+    Get information about, and manipulate jobs using olwclient to communicate with an openlava-web server.
+    There is no requirement for the current host to be part of the underlying cluster, all scheduler interaction
+    will be handled by the remote server.
 
     .. py:attribute:: cluster_type
 
-        The type of cluster, defines the scheduling environment being used under the hood.
+        The type of cluster, defines the scheduling environment being used under the hood.  This is always
+        a short string giving the name of the scheduler, for example for `Openlava <http://www.openlava.org/>`_,
+        it will return openlava, for Sun Grid Engine, it will return sge, etc.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.cluster_type
+            u'openlava'
 
         :return: Scheduler type
         :rtype: str
@@ -986,6 +1289,18 @@ class Job(OpenLavaObject):
 
         The array index of the job, 0 for non-array jobs.
 
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.array_index
+            0
+
         :return: Array Index
         :rtype: int
 
@@ -993,48 +1308,136 @@ class Job(OpenLavaObject):
 
         Numerical Job ID of the job, not including the array index.
 
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.job_id
+            1234
+
         :return: Job ID
         :rtype: int
 
     .. py:attribute:: admins
 
-        List of user names that have administrative rights on this host.
+        List of user names that have administrative rights for this job. This is the job Owner and the Queue
+        administrators.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.admins
+            [u'irvined', u'openlava']
+            >>>
 
         :returns: list of user names
         :rtype: list
 
     .. py:attribute:: begin_time
 
-        Earliest time (Epoch UTC) that the job may begin.  Job will not start before this time
+        Earliest time (Epoch UTC) that the job may begin.  Job will not start before this time.  If no begin time
+        was specified in job submission then the value will be zero.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.begin_time
+            0
 
         :return: Earliest start time of the job as integer since the Epoch (UTC)
         :rtype: int
 
     .. py:attribute:: command
 
-        Command to execute
+        Command to execute as specified by the user.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.command
+            u'sleep 1000'
 
         :return: Command as string
         :rtype: str
 
     .. py:attribute:: consumed_resources
 
-        List of ConsumedResource objects
+        The scheduler may keep track of various resources that are consumed by the job, these are
+        returned as a list of :py:class:`olwclient.ConsumedResource` objects, one for each resource consumed.
 
-        :return: List of ConsumedResource Objects
-        :rtype: list
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.consumed_resources
+            [Resident Memory: 0KB (-1), Virtual Memory: 0KB (-1), User Time: 0:00:00None (-1),
+            System Time: 0:00:00None (None), Num Active Processes: 0Processes (None)]
+
+        :return: List of :py:class:`olwclient.ConsumedResource` Objects
 
     .. py:attribute:: cpu_time
 
-        CPU Time in seconds that the job has consumed
+        CPU Time in seconds that the job has consumed.  This is the amount of processor time, consumed by the job.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.cpu_time
+            0.0
 
         :return: CPU time in seconds
-        :rtype: int
-
+        :rtype: float
 
     .. py:attribute:: dependency_condition
 
-        Dependency conditions that must be met before the job will be dispatched
+        Dependency conditions that must be met before the job will be dispatched.  Returns an empty string if
+        no job dependencies have been specified.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.dependency_condition
+            u''
 
         :return: Job dependency information
         :rtype: str
@@ -1042,35 +1445,104 @@ class Job(OpenLavaObject):
 
     .. py:attribute:: email_user
 
-        User to email job notifications to if set.
+        User to email job notifications to if set.  If no email address was supplied, then returns an empty
+        string.
+
+        .. note::
+
+            If no email address was specified, `Openlava <http://www.openlava.org/>`_ may still email the
+            owner of the job if so configured.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.email_user
+            u''
 
         :return: User email address, may be ""
         :rtype: str
 
     .. py:attribute:: end_time
 
-        Time the job ended in seconds since epoch UTC.
+        Time the job ended in seconds since epoch UTC.  If the job has not yet finished, then end_time will be 0.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.end_time
+            0
 
         :return: Number of seconds since epoch (UTC) when the job exited.
         :rtype: int
 
     .. py:attribute:: error_file_name
 
-        Path to the job error file, may be ""
+        Path to the job error file, may be empty if none was specified.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.error_file_name
+            u'/dev/null'
 
         :returns: Path of the job error file.
         :rtype: str
 
     .. py:attribute:: execution_hosts
 
-        List of host objects that are executing the job.  If the job is not executing, will be an empty list.
+        List of hosts that job is running on, if the job is neither finished nor executing then the list will be empty
 
-        :returns: List of host objects
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.execution_hosts
+            [master:1]
+
+        :returns:
+            List of :py:class:`olwclient.ExecutionHost` objects, one for each host the job
+            is executing on.
+
         :rtype: list
 
     .. py:attribute:: input_file_name
 
-    Path to the job input file, may be ""
+        Path to the job input file, may be ""
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.input_file_name
+            u'/dev/null'
 
         :returns: Path of the job input file.
         :rtype: str
@@ -1078,7 +1550,19 @@ class Job(OpenLavaObject):
     .. py:attribute:: is_completed
 
         True if the job completed without failure.  For this to be true, the job must have returned exit status zero,
-        and must not have been killed by the user or an admin.
+        must not have been killed by the user or an admin.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.is_completed
+            True
 
         :return: True if job has completed without error.
         :rtype: bool
@@ -1086,6 +1570,28 @@ class Job(OpenLavaObject):
     .. py:attribute:: was_killed
 
         True if the job was killed by the owner or an admin.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.is_running
+            False
+            >>> job.is_completed
+            False
+            >>> job.is_pending
+            True
+            >>> job.was_killed
+            False
+            >>> job.is_failed
+            False
+            >>> job.is_suspended
+            False
 
         :return: True if the job was killed
         :rtype: bool
@@ -1095,6 +1601,28 @@ class Job(OpenLavaObject):
         True if the exited due to failure.  For this to be true, the job must have returned a non zero exit status, and
         must not have been killed by the user or admin.
 
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.is_running
+            False
+            >>> job.is_completed
+            False
+            >>> job.is_pending
+            True
+            >>> job.was_killed
+            False
+            >>> job.is_failed
+            False
+            >>> job.is_suspended
+            False
+
         :return: True if the job failed
         :rtype: bool
 
@@ -1102,64 +1630,211 @@ class Job(OpenLavaObject):
 
         True if the job is pending.
 
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.is_running
+            False
+            >>> job.is_completed
+            False
+            >>> job.is_pending
+            True
+            >>> job.was_killed
+            False
+            >>> job.is_failed
+            False
+            >>> job.is_suspended
+            False
+
         :return: True if the job is pending
         :rtype: bool
 
     .. py:attribute:: is_running
 
-        True if the job is running.  For this to be true, the job must currently be executing on compute nodes and the job
-        must not be suspended.
+        True if the job is running.  For this to be true, the job must currently be executing on compute nodes and the
+        job must not be suspended.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.is_running
+            False
+            >>> job.is_completed
+            False
+            >>> job.is_pending
+            True
+            >>> job.was_killed
+            False
+            >>> job.is_failed
+            False
+            >>> job.is_suspended
+            False
 
         :return: True if the job is executing
         :rtype: bool
 
     .. py:attribute:: is_suspended
 
-        True if the job is suspended.  For this to be true, the job must have been suspended by the system, an administrator
-        or the job owner.  The job may have been suspended whilst executing, or whilst in a pending state.
+        True if the job is suspended.  For this to be true, the job must have been suspended by the system, an
+        administrator or the job owner.  The job may have been suspended whilst executing, or whilst in a pending state.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.is_running
+            False
+            >>> job.is_completed
+            False
+            >>> job.is_pending
+            True
+            >>> job.was_killed
+            False
+            >>> job.is_failed
+            False
+            >>> job.is_suspended
+            False
 
         :return: True if the job is suspended
         :rtype: bool
 
     .. py:attribute:: max_requested_slots
 
-        The maximum number of slots that this job will execute on.  If the user requested a range of slots to consume, this
-        is set to the upper bound of that range.
+        The maximum number of slots that this job will execute on.  If the user requested a range of slots to consume,
+        this is set to the upper bound of that range.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.max_requested_slots
+            1
 
         :return: Maximum number of slots requested
         :rtype: int
 
     .. py:attribute:: name
 
-        The name given to the job by the user or scheduling system. May be "".
+        The name given to the job by the user or scheduling system. May be "".  If this is an array job, then the
+        job name will contain the array information.  Generally if no name was specified, then the name will be set
+        to the command that was specified.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.name
+            u'sleep 100'
 
         :return: Name of job
         :rtype: str
 
+
     .. py:attribute:: options
 
-        List of JobOptions for the job
+        Job options control the behavior of the job and specify additional scheduling criteria being used to
+        schedule and execute the job.  They may have been explicitly set by the user, or the scheduler.
 
-        :return: List of JobOptions
-        :rtype: list
+        Job options is list containing :py:class:`olwclient.JobOption`
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.options
+            [SUB_QUEUE, SUB_PROJECT_NAME, SUB_OUT_FILE]
+
+        :return: List of :py:class:`olwclient.JobOption`
+        :rtype: List
+
 
     .. py:attribute:: output_file_name
 
-        Path to the job output file, may be ""
+        Path to the job output file, may be "" if the job output is not being directed to a file.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.output_file_name
+            u'/dev/null'
 
         :returns: Path of the job output file.
         :rtype: str
 
     .. py:attribute:: pending_reasons
 
-        Text string explainging why the job is pending.
+        Text string explaining why the job is pending.  These are the human readable reasons that
+        the scheduler has for not executing the job at present.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.pending_reasons
+            u' The job was suspended by the user while pending: 1 host;'
 
         :return: Reason why the job is pending.
         :rtype: str
 
     .. py:attribute:: predicted_start_time
 
-        The time the job is predicted to start, in seconds since EPOCH. (UTC)
+        The time the job is predicted to start, in seconds since EPOCH. (UTC)  If the expected start time is not
+        available then returns zero.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.predicted_start_time
+            0
 
         :return: The predicted start time
         :rtype: int
@@ -1167,49 +1842,145 @@ class Job(OpenLavaObject):
     .. py:attribute:: priority
 
         The priority given to the job by the user, this may have been modified by the scheduling environment, or an
-        administrator.
+        administrator.  If no priority was given, then returns -1.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.priority
+            -1
 
         :return: Priority
         :rtype: int
 
     .. py:attribute:: process_id
 
-        The numeric process ID of the primary process associated with this job.
+        The numeric process ID of the primary process associated with this job.  If the job does not have a process id
+        then returns -1.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.is_pending
+            True
+            >>> job.process_id
+            -1
+            >>> job.is_running
+            True
+            >>> job.process_id
+            25148
 
         :return: Process ID
         :rtype: int
 
     .. py:attribute:: processes
 
-        Array of process objects for each process  started by the job.
+        Array of process objects for each process started by the job.  This only includes processes that Openlava
+        is aware of, processes that are started independently of `Openlava <http://www.openlava.org/>`_ will
+        not be included. Generally this only includes the primary process on the primary host and any child processes.
 
-        :return: Array of Process objects
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.processes
+            [None:16422, None:16422, None:16422]
+
+        :return: Array of :py:class:`cluster.Process` objects
         :rtype: list
 
     .. py:attribute:: project_names
 
         Array of project names that the job was submitted with.
 
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.project_names
+            [u'default']
+
         :return: Project Names
         :rtype: list of str
+
 
     .. py:attribute:: requested_resources
 
         Resource string requested by the user.  This may be have been modified by the scheduler, or an administrator.
+        If no resources were requested, returns an empty string.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.requested_resources
+            u''
 
         :return: Resource Requirements
         :rtype: str
 
     .. py:attribute:: requested_slots
 
-        The number of job slots requested by the job
+        The number of job slots requested by the job.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.requested_slots
+            1
 
         :return: Slots requested
         :rtype: int
 
     .. py:attribute:: reservation_time
 
-        The time when the slots for this job were reserved.  Time is in seconds since Epoch (UTC)
+        The time when the slots for this job were reserved.  Time is in seconds since Epoch (UTC).  If the slots were
+        not reserved, then returns zero.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.reservation_time
+            0
 
         :return: Time when slots were reserved.
         :rtype: int
@@ -1218,33 +1989,110 @@ class Job(OpenLavaObject):
 
         Array of run time limits imposed on the job.  May have been modified by the scheduler or an administrator.
 
-        :returns: Resource Limits
-        :rtype: list of ResourceLimit objects
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.runtime_limits
+            [CPU Time:-1 (-1), File Size:-1 (-1), Data Segment Size:-1 (-1), Stack Size:-1 (-1),
+            Core Size:-1 (-1), RSS Size:-1 (-1), Num Files:-1 (-1), Max Open Files:-1 (-1), Swap Limit:-1 (-1),
+            Run Limit:-1 (-1), Process Limit:-1 (-1)]
+
+        :returns: All applicable :py:class:`olwclient.ResourceLimit` objects for the job.
+        :rtype: list of :py:class:`olwclient.ResourceLimit` objects
+
 
     .. py:attribute:: start_time
 
-        The time time the job started in seconds since Epoch. (UTC)
+        The time time the job started in seconds since Epoch. (UTC)  If the job has not yet started, returns 0.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.start_time
+            1414347750
 
         :returns: Job Start Time
         :rtype: int
 
     .. py:attribute:: status
 
-        Job Status object that defines the current status of the job.
+        :py:class:`cluster.openlavacluster.JobStatus` object that defines the current status of the job.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
 
         :return: Job Status
-        :rtype: JobStatus
+        :rtype: :py:class:`cluster.openlavacluster.JobStatus`
+
+    .. py:attribute:: submission_host
+
+        :py:class:`cluster.Host` object corresponding to the host that the job was submitted from.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
+        :return: Submit :py:class:`cluster.Host` object
+        :rtype: :py:class:`cluster.Host`
 
     .. py:attribute:: submit_time
 
         The time the job was submitted in seconds since Epoch. (UTC)
 
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :returns: Job Submit Time
         :rtype: int
 
-    .. py:attribute:: suspension_reasons
+    .. py:attribute:: suspension_reason
 
-        Text string explaining why the job is suspended.
+    Text string explaining why the job is suspended.  If the job is not suspended, may return invalid information.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: Reason why the job is suspended.
         :rtype: str
@@ -1252,7 +2100,18 @@ class Job(OpenLavaObject):
     .. py:attribute:: termination_time
 
         Termination deadline in seconds since the Epoch. (UTC)  The job will be terminated if it is not finished by
-        this time.
+        this time.  If no termination deadline was specified, returns zero.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: Job termination time
         :rtype: int
@@ -1261,12 +2120,36 @@ class Job(OpenLavaObject):
 
         User name of the job owner.
 
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :return: Username
         :rtype: str
+
 
     .. py:attribute:: user_priority
 
         User given priority for the job.  This may have been modified by the scheduling system or an administrator.
+        If the user did not specify a priority, then returns -1.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: priority
         :rtype: int
@@ -1277,33 +2160,105 @@ class Job(OpenLavaObject):
         An array of Host objects corresponding the the hosts that the user requested for this job.  If the user did
         not request any hosts, then the list will be empty.
 
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :return: List of requested hosts
         :rtype: list
 
     .. py:attribute:: checkpoint_directory
 
-        Path to directory where checkpoint data will be written to.
+        Path to directory where checkpoint data will be written to.  If no checkpoint directory was specified then
+        returns an empty string.
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: path to checkpoint directory
         :rtype: str
 
     .. py:attribute:: checkpoint_period
 
-        Number of seconds between checkpoint operations
+        Number of seconds between checkpoint operations.  If no checkpointing period was specified, then returns 0.
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: Number of seconds between checkpoints
         :rtype: int
 
     .. py:attribute:: cpu_factor
 
-        CPU Factor of execution host
+        CPU Factor of execution host.
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: CPU Factor
         :rtype: float
 
     .. py:attribute:: cwd
 
-        Current Working Directory of the job
+        Current Working Directory of the job.  This is a relative path, and may consist of only the basename.
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: Current Working Directory
         :rtype: str
@@ -1312,12 +2267,42 @@ class Job(OpenLavaObject):
 
         Current working directory on the execution host
 
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :return: CWD on exec host
         :rtype: str
 
     .. py:attribute:: execution_home_directory
 
         The home directory of the user on the execution host.
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return Home Directory
         :rtype: str
@@ -1326,12 +2311,42 @@ class Job(OpenLavaObject):
 
         User ID of the user used to execute the job on the execution host.
 
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :return: Numerical ID of the user
         :rtype: int
 
     .. py:attribute:: execution_user_name
 
         User name of the user used to execute the job on the execution host.
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: name of the user
         :rtype: str
@@ -1340,12 +2355,42 @@ class Job(OpenLavaObject):
 
     A hostname or model name that describes the specification of the host being used to execute the job.
 
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :return: Host Specification
         :rtype: str
 
     .. py:attribute:: login_shell
 
-        The shell used when running the job.  If not used, or not specified will be ""
+        The shell used when running the job.  If not used, or not specified will return an empty string.
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: Login Shell
         :rtype: str
@@ -1354,12 +2399,42 @@ class Job(OpenLavaObject):
 
         The parent Job Group, if not used will be ""
 
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :return: Parent Job Group
         :rtype: str
 
     .. py:attribute:: pre_execution_command
 
-        Pre Execution Command specified by the user, if this is not supplied, will be ""
+        Pre Execution Command specified by the user, if this is not supplied, will return and empty string.
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: Pre Execution Command
         :rtype: str
@@ -1368,12 +2443,42 @@ class Job(OpenLavaObject):
 
         The time the resource usage information was last updated in seconds since Epoch. (UTC)
 
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :return: resource usage update time
         :rtype: int
 
     .. py:attribute:: service_port
 
         NIOS Port of the job
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
 
         :return: NIOS Port
         :rtype: int
@@ -1382,17 +2487,81 @@ class Job(OpenLavaObject):
 
         Home directory on the submit host of the user used to execute the job
 
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :return: Home Directory
-        :rtype str
+
+        :rtype: str
 
     .. py:attribute:: termination_signal
 
         Signal to send when job exceeds termination deadline.
 
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+
+
         :return: Termination Signal
         :rtype: int
 
     """
+
+    def __repr__(self):
+        s = "%s" % self.job_id
+        if self.array_index > 0:
+            s += "[%s]" % self.array_index
+        return s
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __unicode__(self):
+        return u"%s" % self.__str__()
+
+    @property
+    def resource_usage_last_update_time_datetime(self):
+        """
+        A datetime object set to the time the resource usage information was last updated
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> from cluster.openlavacluster import Job
+            >>> job = Job.submit(command="sleep 500", requested_slots=1)[0]
+            Job <9581> is submitted to default queue <normal>.
+            >>> print job.resource_usage_last_update_time_datetime
+            2014-10-17 16:18:53
+
+        :return: last update time of resource usage
+        :rtype: datetime
+
+        """
+        return datetime.datetime.utcfromtimestamp(self.resource_usage_last_update_time)
 
     @property
     def submit_time_datetime(self):
@@ -1429,6 +2598,28 @@ class Job(OpenLavaObject):
         """
         return Host(self._connection, host_name=self._submission_host['name'])
 
+    def checkpoint_period_timedelta(self):
+        """
+        Checkpointing period as a timedelta object
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        Example::
+
+            >>> from cluster.openlavacluster import Job
+            >>> job = Job.submit(command="sleep 500", requested_slots=1)[0]
+            Job <9581> is submitted to default queue <normal>.
+            >>> print job.checkpoint_period_timedelta
+            0:00:00
+
+        :return: Checkpointing period
+        :rtype: timedelta
+
+        """
+        return datetime.timedelta(seconds=self.checkpoint_period)
+
     def __init__(self, connection, job_id=None, array_index=None, data=None):
         """
         Creates a new instance of the job class.
@@ -1455,30 +2646,30 @@ class Job(OpenLavaObject):
                 array_index = 0
             url = connection.url + "/job/%s/%s" % (job_id, array_index)
             req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
-            try:
-                data = connection.open(req).read()
-                data = json.loads(data)['data']
-            except urllib2.HTTPError as e:
-                if e.code == 404:
-                    raise NoSuchJobError("No such job: %s" % job_id)
-                else:
-                    raise
+            data = connection.open(req)
+            if not isinstance(data, dict):
+                raise RemoteServerError("Expected a dict from: %s but got a: %s" % (url, type(data)))
+            if data['type'] != "Job":
+                raise RemoteServerError("Expected a Job object but got a : %s" % (url, data['type']))
 
         if not isinstance(data, dict):
-            raise ValueError("Data must be a dict")
+                raise ValueError("Data must be a dict")
         if data['type'] != "Job":
             raise ValueError("data is not of type Job")
+
         self._queue = data['queue']
         del (data['queue'])
         self._submission_host = data['submission_host']
         del (data['submission_host'])
 
         OpenLavaObject.__init__(self, connection, data=data)
+
         self.consumed_resources = [ConsumedResource(self._connection, data=d) for d in self.consumed_resources]
-        self.execution_hosts = [ExecutionHost(self._connection, host_name=d['name'], num_slots_for_job=d['num_slots']) for d in self.execution_hosts]
+        self.execution_hosts = [ExecutionHost(self._connection, data=d) for d in self.execution_hosts]
         self.options = [JobOption(self._connection, data=d) for d in self.options]
         self.processes = [Process(self._connection, data=d) for d in self.processes]
         self.status = Status(self._connection, data=self.status)
+        self.runtime_limits = [ResourceLimit(self._connection, data=d) for d in self.runtime_limits]
 
     def kill(self):
         """
@@ -1586,7 +2777,8 @@ class Job(OpenLavaObject):
             return [Job(connection, data=i) for i in data]
 
     @classmethod
-    def get_job_list(cls, connection, job_id=0, array_index=-1, queue_name=None, host_name=None, user_name="all", job_state="ACT", job_name=None):
+    def get_job_list(cls, connection, job_id=0, array_index=-1, queue_name=None, host_name=None, user_name="all",
+                     job_state="ACT", job_name=None):
         """
         Returns a list of jobs that match the specified criteria.
 
@@ -1645,16 +2837,11 @@ class Job(OpenLavaObject):
             url = connection.url + "/jobs?" + urllib.urlencode(params)
         logging.debug("Sending request")
         request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
-        logging.debug("Opening Connection")
-        data = connection.open(request).read()
-        logging.debug("Got data back")
-        data = json.loads(data)
-        if not isinstance(data['data'], list):
-            raise ValueError("Got unexpected data from server: %s" % data)
-        return [cls(connection, data=i) for i in data['data']]
 
-
-
+        data = connection.open(request)
+        if not isinstance(data, list):
+            raise RemoteServerError("Expected: %s to return a list of jobs, not: %s" % (url, type(data)))
+        return [cls(connection, data=i) for i in data]
 
 
 __ALL__ = [OpenLavaConnection, AuthenticationError, RemoteException, NoSuchObjectError, Host, Job, ExecutionHost]
