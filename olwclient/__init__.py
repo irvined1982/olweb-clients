@@ -415,6 +415,15 @@ Total slots consumed on the host
 
 """
 
+    def __str__(self):
+        return self.host_name
+
+    def __unicode__(self):
+        return u"%s" % self.host_name
+
+    def __repr__(self):
+        return self.__str__()
+
     @classmethod
     def get_hosts_by_names(cls, connection, host_names):
         """
@@ -2039,27 +2048,11 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
+            >>> job.status
+            JOB_STAT_RUN
 
         :return: Job Status
         :rtype: :py:class:`cluster.openlavacluster.JobStatus`
-
-    .. py:attribute:: submission_host
-
-        :py:class:`cluster.Host` object corresponding to the host that the job was submitted from.
-
-        Example::
-
-            >>> class ConnectionArgs:
-            ...  username="mytestuser"
-            ...  password="topsecret"
-            ...  url="http://example.com/"
-            >>> from olwclient import Job, OpenLavaConnection
-            >>> c=OpenLavaConnection(ConnectionArgs)
-            >>> job=Job.get_job_list(c)[0]
-
-
-        :return: Submit :py:class:`cluster.Host` object
-        :rtype: :py:class:`cluster.Host`
 
     .. py:attribute:: submit_time
 
@@ -2074,12 +2067,13 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.submit_time
+            1414347742
 
         :returns: Job Submit Time
         :rtype: int
 
-    .. py:attribute:: suspension_reason
+    .. py:attribute:: suspension_reasons
 
     Text string explaining why the job is suspended.  If the job is not suspended, may return invalid information.
 
@@ -2092,7 +2086,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.suspension_reasons
+            u' Unknown suspending reason code: 0'
 
         :return: Reason why the job is suspended.
         :rtype: str
@@ -2111,7 +2106,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.termination_time
+            0
 
         :return: Job termination time
         :rtype: int
@@ -2129,7 +2125,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.user_name
+            u'irvined'
 
         :return: Username
         :rtype: str
@@ -2149,7 +2146,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.user_priority
+            -1
 
         :return: priority
         :rtype: int
@@ -2169,7 +2167,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.requested_hosts
+            []
 
         :return: List of requested hosts
         :rtype: list
@@ -2192,7 +2191,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.checkpoint_directory
+            u''
 
         :return: path to checkpoint directory
         :rtype: str
@@ -2214,7 +2214,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.checkpoint_period
+            0
 
         :return: Number of seconds between checkpoints
         :rtype: int
@@ -2236,7 +2237,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.cpu_factor
+            0.0
 
         :return: CPU Factor
         :rtype: float
@@ -2258,7 +2260,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.cwd
+            u''
 
         :return: Current Working Directory
         :rtype: str
@@ -2280,7 +2283,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.execution_cwd
+            u'/home/mytestuser'
 
         :return: CWD on exec host
         :rtype: str
@@ -2302,7 +2306,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.execution_home_directory
+            u'/home/irvined'
 
         :return Home Directory
         :rtype: str
@@ -2324,7 +2329,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.execution_user_id
+            1000
 
         :return: Numerical ID of the user
         :rtype: int
@@ -2346,7 +2352,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.execution_user_name
+            u'irvined'
 
         :return: name of the user
         :rtype: str
@@ -2368,7 +2375,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.host_specification
+            u'master'
 
         :return: Host Specification
         :rtype: str
@@ -2390,7 +2398,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.login_shell
+            u''
 
         :return: Login Shell
         :rtype: str
@@ -2412,7 +2421,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.parent_group
+            u'/'
 
         :return: Parent Job Group
         :rtype: str
@@ -2434,7 +2444,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.pre_execution_command
+            u''
 
         :return: Pre Execution Command
         :rtype: str
@@ -2456,7 +2467,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.resource_usage_last_update_time
+            1414348649
 
         :return: resource usage update time
         :rtype: int
@@ -2478,7 +2490,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.service_port
+            0
 
         :return: NIOS Port
         :rtype: int
@@ -2500,7 +2513,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.submit_home_directory
+            u'/home/irvined'
 
         :return: Home Directory
 
@@ -2521,7 +2535,8 @@ class Job(OpenLavaObject):
             >>> from olwclient import Job, OpenLavaConnection
             >>> c=OpenLavaConnection(ConnectionArgs)
             >>> job=Job.get_job_list(c)[0]
-
+            >>> job.termination_signal
+            0
 
         :return: Termination Signal
         :rtype: int
@@ -2551,9 +2566,13 @@ class Job(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import Job
-            >>> job = Job.submit(command="sleep 500", requested_slots=1)[0]
-            Job <9581> is submitted to default queue <normal>.
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
             >>> print job.resource_usage_last_update_time_datetime
             2014-10-17 16:18:53
 
@@ -2589,11 +2608,22 @@ class Job(OpenLavaObject):
     @property
     def submission_host(self):
         """
+        :py:class:`olwclient.Host` object corresponding to the host that the job was submitted from.
 
-        Host object corresponding to the host that the job was submitted from.
+        Example::
 
-        :return: Submit Host object
-        :rtype: Host
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
+            >>> job.submission_host
+            master
+
+        :return: Submit :py:class:`olwclient.Host` object
+        :rtype: :py:class:`cluster.Host`
 
         """
         return Host(self._connection, host_name=self._submission_host['name'])
@@ -2608,9 +2638,13 @@ class Job(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import Job
-            >>> job = Job.submit(command="sleep 500", requested_slots=1)[0]
-            Job <9581> is submitted to default queue <normal>.
+            >>> class ConnectionArgs:
+            ...  username="mytestuser"
+            ...  password="topsecret"
+            ...  url="http://example.com/"
+            >>> from olwclient import Job, OpenLavaConnection
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> job=Job.get_job_list(c)[0]
             >>> print job.checkpoint_period_timedelta
             0:00:00
 
