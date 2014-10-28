@@ -2794,21 +2794,13 @@ class Job(OpenLavaObject):
         for k in kwargs.keys():
             if k not in allowed_keys:
                 raise ValueError("Argument: %s is not valid" % k)
-        logging.debug("Encoding Data")
         data = json.dumps(kwargs)
-        logging.debug("Data Encoded")
         url = connection.url + "/job/submit"
-        logging.debug("Sending to: %s" % url)
         request = urllib2.Request(url, data, {'Content-Type': 'application/json'})
-        logging.debug("Openning Connection")
-        data = connection.open(request).read()
-        logging.debug("Read response, decoding")
-        data = json.loads(data)
-        logging.debug("Decoded")
-        if 'status' in data and data['status'] == 'Fail':
-            raise RemoteException(data)
-        if isinstance(data, list):
-            return [Job(connection, data=i) for i in data]
+        data = connection.open(request)
+        if not isinstance(data, list):
+            raise RemoteServerError("Server did not return a list: %s" % url)
+        return [Job(connection, data=i) for i in data]
 
     @classmethod
     def get_job_list(cls, connection, job_id=0, array_index=-1, queue_name=None, host_name=None, user_name="all",
