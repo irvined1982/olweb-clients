@@ -264,154 +264,55 @@ class OpenLavaObject(object):
 
 
 class Host(OpenLavaObject):
-    """Retrieve queue information and perform administrative actions on queues on the remote cluster.
+    """
+    Retrieve Host information and perform administrative actions on hosts on the cluster.  Hosts are any kind
+    of host associated with the cluster, they may be submit hosts, execution hosts, clients, etc.
 
-.. py:attribute:: admins
+    .. py:attribute:: cluster_type
 
-List of user names that have administrative rights on this host.
+        The type of cluster this host object is associated with.
 
-:returns: list of user names
-:rtype: list of str
+    .. py:attribute:: name
 
-.. py:attribute:: cpu_factor
+        The host name of the host.
 
-CPU Factor of the host
+        Example::
 
-.. py:attribute:: description
+            >>> from cluster.openlavacluster import Host
+            >>> host=Host.get_host_list()[0]
+            >>> host.name
+            u'...'
 
-Description of the host
+        :return: hostname
+        :rtype: str
 
-.. py:attribute:: has_checkpoint_support
+    .. py:attribute:: host_name
 
-True if the host supports checkpointing
+        The host name of the host.
 
-.. py:attribute:: has_kernel_checkpoint_copy
+        Example::
 
-True if the host has kernel checkpointing support
+            >>> from cluster.openlavacluster import Host
+            >>> host=Host.get_host_list()[0]
+            >>> host.name
+            u'...'
 
-.. py:attribute:: host_model
+        :return: hostname
+        :rtype: str
 
-Model name of the host
+    .. py:attribute:: description
 
-.. py:attribute:: host_name
+        The description given to the host by the cluster administrators.
 
-Hostname of the host
+        Example::
 
-.. py:attribute:: host_type
+            >>> from cluster.openlavacluster import Host
+            >>> host=Host.get_host_list()[0]
+            >>> host.description
+            u''
 
-Host architecture
-
-.. py:attribute:: is_busy
-
-True if the host is currently busy
-
-.. py:attribute:: is_closed
-
-True if the host is currently closed
-
-.. py:attribute:: is_down
-
-True if the host is down for an unknown reason
-
-.. py:attribute:: is_server
-
-True if the host is a job server
-
-.. py:attribute:: load_information
-
-List of LoadIndex objects
-
-.. py:attribute:: max_jobs
-
-The maximum number of jobs that may execute on this host
-
-.. py:attribute:: max_processors
-
-The total number of processors available to jobs on this host
-
-.. py:attribute:: max_ram
-
-The total amount of RAM available to jobs on this host
-
-.. py:attribute:: max_slots
-
-The total number of slots available to jobs on this host
-
-.. py:attribute:: max_slots_per_user
-
-The maximum number of slots that may be consumed per user on this host
-
-.. py:attribute:: max_swap
-
-The maximum amount of swap space that is available to jobs on this host
-
-.. py:attribute:: max_tmp
-
-The maximum amount of temporary space that is available to jobs on this host
-
-.. py:attribute:: name
-
-The name of the host
-
-.. py:attribute:: num_disks
-
-The number of physical disks attached
-
-.. py:attribute:: num_reserved_slots
-
-The number of slots that are reserved
-
-.. py:attribute:: num_running_jobs
-
-The number of jobs that are running
-
-.. py:attribute:: num_running_slots
-
-The number of slots that are running
-
-.. py:attribute:: num_suspended_jobs
-
-The number of jobs that are suspended
-
-.. py:attribute:: num_suspended_slots
-
-The number of slots that are suspended
-
-.. py:attribute:: num_system_suspended_jobs
-
-The number of jobs that have been suspended by the system
-
-.. py:attribute:: num_system_suspended_slots
-
-The number of slots that have been suspended by the system
-
-.. py:attribute:: num_user_suspended_jobs
-
-The number of jobs that have been suspended by the user
-
-.. py:attribute:: num_user_suspended_slots
-
-The number of slots that have been suspended by the user
-
-.. py:attribute:: resources
-
-List of resources that are available on the system
-
-.. py:attribute:: run_windows
-
-The run windows that the host is open for. If empty indicates that the host is always open.
-
-.. py:attribute:: statuses
-
-List of statuses that apply to the host
-
-.. py:attribute:: total_jobs
-
-Total jobs on the host
-
-.. py:attribute:: total_slots
-
-Total slots consumed on the host
+        :return: Host description
+        :rtype: str
 
 """
 
@@ -445,7 +346,20 @@ Total slots consumed on the host
 
     @classmethod
     def get_host_list(cls, connection):
-        """Returns all hosts on the remote cluster"""
+        """
+        Get all hosts that are part of the cluster.
+
+        :param connection: Connection object
+
+        Example::
+
+            >>> from cluster.openlavacluster import Host
+            >>> host=Host.get_host_list()[0]
+            >>> Host.get_host_list()
+            [master, comp00, comp01, comp02, comp03, comp04]
+
+        :return: List of :py:class:`cluster.openlavacluster.Host` Objects, one for each host on the cluster.
+        :rtype: list"""
         url = connection.url + "/hosts"
         request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
         try:
@@ -508,361 +422,30 @@ class RemoteException(Exception):
             setattr(self, k, v)
 
 
+
+
+
 class Status(OpenLavaObject, StatusType):
-    """Status of an object.
-
-.. py:attribute:: description
-
-Description of the status
-
-.. py:attribute:: friendly
-
-Friendly name for the status
-
-.. py:attribute:: name
-
-Full name of the status
-
-.. py:attribute:: status
-
-Numeric code of the status
-
     """
-
-
-class Resource(OpenLavaObject):
-    """Available resource on the remote cluster.
-
-.. py:attribute:: description
-
-Description of the resource
-
-.. py:attribute:: flags
-
-Flags set on the resource
-
-.. note:: Openlava scheduler only.
-
-.. py:attribute:: interval
-
-Resource update interval for dynamic resources
-
-.. note:: Openlava scheduler only.
-
-.. py:attribute:: name
-
-Name of the resource
-
-.. py:attribute:: order
-
-Ordering of the resource
-
-.. note:: Openlava scheduler only.
-
-    """
-    pass
-
-
-class ConsumedResource(OpenLavaObject):
-    """
-        .. py:attribute:: name
-
-        The name of the consumed resource.
-
-        :return: name of resource
-        :rtype: str
-
-    .. py:attribute:: value
-
-        The current value of the consumed resource.
-
-        :return: value of resource
-        :rtype: str
-
-    .. py:attribute:: limit
-
-        The limit specified for the resource, may be None, if the resource does not have a limit.
-
-        :return: limit of resource consumption
-        :rtype: str
-
-    .. py:attribute:: unit
-
-        The unit of measurement for the resource, may be None, if the unit cannot be determined.
-
-        :return: unit of measurement
-        :rtype: str
-
-    """
-
-    def __str__(self):
-        s = "%s: %s" % (self.name, self.value)
-        if self.unit:
-            s += "%s" % self.unit
-
-        if self.limit:
-            s += " (%s)" % self.limit
-
-        return s
-
-    def __unicode__(self):
-        return u"%s" % self.__str__()
-
-    def __repr__(self):
-        return self.__str__()
-
-
-class JobOption(OpenLavaObject, StatusType):
-    """
-    When a job is submitted, it may be submitted with options that define job behavior.   These may be to
-    define the job behavior such as host exclusivity, or to specify that other fields, such as job name have
-    been used.
-
-    .. py:attribute:: name
-
-        Gets the name of the status, this is generally the name of the constant defined in the Openlava header
-        file.
-
-        :return: Status Name
-        :rtype: str
+    Status of an object.
 
     .. py:attribute:: description
 
-        Gets the description of the status, this is the human readable description of the status, it is generally
-        the human readable description defined in the `Openlava <http://www.openlava.org/>`_ header file.
-
-        .. note:
-
-            Descriptions may be empty.
-
-        :return: Description of the status.
-        :rtype: str
-
-    .. py:attribute:: status
-
-        Returns the status code, this is the numeric value of the code. This is generally the value of the constant
-        defined in the `Openlava <http://www.openlava.org/>`_ header file.
-
-        :return: The status code
-        :rtype: int
-
+        Description of the status
 
     .. py:attribute:: friendly
 
-        A friendly name for the status, this is a short, human readable name.
+        Friendly name for the status
 
-        :return: Human readable status name
-        :rtype: str
+    .. py:attribute:: name
 
-    .. list-table:: Valid Statuses for Openlava Jobs
-        :header-rows: 1
+        Full name of the status
 
-        * - Value
-          - Friendly Name
-          - Name
-          - Description
-        * - 0x01
-          - SUB_JOB_NAME
-          - Job submitted with name
-          - Submitted with a job name
-        * - 0x02
-          - SUB_QUEUE
-          - Job submitted with queue
-          -
-        * - 0x04
-          - SUB_HOST
-          - SUB_HOST
-          -
-        * - 0x08
-          - SUB_IN_FILE
-          - Job Submitted with input file
-          -
-        * - 0x10
-          - SUB_OUT_FILE
-          - Job submitted with output file
-          -
-        * - 0x20
-          - SUB_ERR_FILE
-          - Job submitted with error file
-          -
-        * - 0x40
-          - SUB_EXCLUSIVE
-          - Job submitted to run exclusively
-          -
-        * - 0x80
-          - SUB_NOTIFY_END
-          - SUB_NOTIFY_END
-          -
-        * - 0x100
-          - SUB_NOTIFY_BEGIN
-          - SUB_NOTIFY_BEGIN
-          -
-        * - 0x200
-          - SUB_USER_GROUP
-          - SUB_USER_GROUP
-          -
-        * - 0x400
-          - SUB_CHKPNT_PERIOD
-          - Job submitted with checkpoint period
-          -
-        * - 0x800
-          - SUB_CHKPNT_DIR
-          - Job submitted with checkpoint directory
-          -
-        * - 0x1000
-          - SUB_RESTART_FORCE
-          - SUB_RESTART_FORCE
-          -
-        * - 0x2000
-          - SUB_RESTART
-          - SUB_RESTART
-          -
-        * - 0x4000
-          - SUB_RERUNNABLE
-          - Job submitted as rerunnable
-          -
-        * - 0x8000
-          - SUB_WINDOW_SIG
-          - SUB_WINDOW_SIG
-          -
-        * - 0x10000
-          - SUB_HOST_SPEC
-          - Job submitted with host spec
-          -
-        * - 0x20000
-          - SUB_DEPEND_COND
-          - Job submitted with depend conditions
-          -
-        * - 0x40000
-          - SUB_RES_REQ
-          - Job submitted with resource request
-          -
-        * - 0x80000
-          - SUB_OTHER_FILES
-          - SUB_OTHER_FILES
-          -
-        * - 0x100000
-          - SUB_PRE_EXEC
-          - Job submitted with pre exec script
-          -
-        * - 0x200000
-          - SUB_LOGIN_SHELL
-          - Job submitted with login shell
-          -
-        * - 0x400000
-          - SUB_MAIL_USER
-          - Job submitted to email user
-          -
-        * - 0x800000
-          - SUB_MODIFY
-          - SUB_MODIFY
-          -
-        * - 0x1000000
-          - SUB_MODIFY_ONCE
-          - SUB_MODIFY_ONCE
-          -
-        * - 0x2000000
-          - SUB_PROJECT_NAME
-          - Job submitted to project
-          -
-        * - 0x4000000
-          - SUB_INTERACTIVE
-          - Job submitted as interactive
-          -
-        * - 0x8000000
-          - SUB_PTY
-          - SUB_PTY
-          -
-        * - 0x10000000
-          - SUB_PTY_SHELL
-          - SUB_PTY_SHELL
-          -
-      * - 0x01
-          - SUB2_HOLD
-          - SUB2_HOLD
-          -
-        * - 0x02
-          - SUB2_MODIFY_CMD
-          - SUB2_MODIFY_CMD
-          -
-        * - 0x04
-          - SUB2_BSUB_BLOCK
-          - SUB2_BSUB_BLOCK
-          -
-        * - 0x08
-          - SUB2_HOST_NT
-          - SUB2_HOST_NT
-          -
-        * - 0x10
-          - SUB2_HOST_UX
-          - SUB2_HOST_UX
-          -
-        * - 0x20
-          - SUB2_QUEUE_CHKPNT
-          - SUB2_QUEUE_CHKPNT
-          -
-        * - 0x40
-          - SUB2_QUEUE_RERUNNABLE
-          - SUB2_QUEUE_RERUNNABLE
-          -
-        * - 0x80
-          - SUB2_IN_FILE_SPOOL
-          - SUB2_IN_FILE_SPOOL
-          -
-        * - 0x100
-          - SUB2_JOB_CMD_SPOOL
-          - SUB2_JOB_CMD_SPOOL
-          -
-        * - 0x200
-          - SUB2_JOB_PRIORITY
-          - SUB2_JOB_PRIORITY
-          -
-        * - 0x400
-          - SUB2_USE_DEF_PROCLIMIT
-          - SUB2_USE_DEF_PROCLIMIT
-          -
-        * - 0x800
-          - SUB2_MODIFY_RUN_JOB
-          - SUB2_MODIFY_RUN_JOB
-          -
-        * - 0x1000
-          - SUB2_MODIFY_PEND_JOB
-          - SUB2_MODIFY_PEND_JOB
-          -
+    .. py:attribute:: status
+
+        Numeric code of the status
 
     """
-
-
-
-class Process(OpenLavaObject):
-    """
-    Processes represent executing processes that are part of a job.  Where supported the scheduler may
-    keep track of processes spawned by the job.  Information about the process is returned in Process
-    classes.
-
-    .. py:attribute:: hostname
-
-        The name of the host that the process is running on.  This may not be available if the scheduler does not
-        track which hosts start which process.
-
-    .. py:attribute:: process_id
-
-        The numerical ID of the running process.
-
-    .. py:attribute:: extras
-
-        A list of extra field names that are available
-
-    """
-
-    def __str__(self):
-        return "%s:%s" % (self.hostname, self.process_id)
-
-    def __unicode__(self):
-        return u"%s" % self.__str__()
-
-    def __repr__(self):
-        return self.__str__()
 
 
 class Queue(OpenLavaObject):
@@ -1218,8 +801,6 @@ class ExecutionHost(Host):
             else:
                 raise AttributeError
 
-
-
     def __str__(self):
         return "%s:%s" % (self.host_name, self.num_slots_for_job)
 
@@ -1266,6 +847,349 @@ class ResourceLimit(OpenLavaObject):
 
     def __unicode__(self):
         return u"%s" % self.__str__()
+
+
+class ConsumedResource(OpenLavaObject):
+    """
+        .. py:attribute:: name
+
+        The name of the consumed resource.
+
+        :return: name of resource
+        :rtype: str
+
+    .. py:attribute:: value
+
+        The current value of the consumed resource.
+
+        :return: value of resource
+        :rtype: str
+
+    .. py:attribute:: limit
+
+        The limit specified for the resource, may be None, if the resource does not have a limit.
+
+        :return: limit of resource consumption
+        :rtype: str
+
+    .. py:attribute:: unit
+
+        The unit of measurement for the resource, may be None, if the unit cannot be determined.
+
+        :return: unit of measurement
+        :rtype: str
+
+    """
+
+    def __str__(self):
+        s = "%s: %s" % (self.name, self.value)
+        if self.unit:
+            s += "%s" % self.unit
+
+        if self.limit:
+            s += " (%s)" % self.limit
+
+        return s
+
+    def __unicode__(self):
+        return u"%s" % self.__str__()
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class Resource(OpenLavaObject):
+    """Available resource on the remote cluster.
+
+.. py:attribute:: description
+
+Description of the resource
+
+.. py:attribute:: flags
+
+Flags set on the resource
+
+.. note:: Openlava scheduler only.
+
+.. py:attribute:: interval
+
+Resource update interval for dynamic resources
+
+.. note:: Openlava scheduler only.
+
+.. py:attribute:: name
+
+Name of the resource
+
+.. py:attribute:: order
+
+Ordering of the resource
+
+.. note:: Openlava scheduler only.
+
+    """
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "%s" % self.name
+
+    def __unicode__(self):
+        return u"%s" % self.__str__()
+
+
+class JobOption(OpenLavaObject, StatusType):
+    """
+    When a job is submitted, it may be submitted with options that define job behavior.   These may be to
+    define the job behavior such as host exclusivity, or to specify that other fields, such as job name have
+    been used.
+
+    .. py:attribute:: name
+
+        Gets the name of the status, this is generally the name of the constant defined in the Openlava header
+        file.
+
+        :return: Status Name
+        :rtype: str
+
+    .. py:attribute:: description
+
+        Gets the description of the status, this is the human readable description of the status, it is generally
+        the human readable description defined in the `Openlava <http://www.openlava.org/>`_ header file.
+
+        .. note:
+
+            Descriptions may be empty.
+
+        :return: Description of the status.
+        :rtype: str
+
+    .. py:attribute:: status
+
+        Returns the status code, this is the numeric value of the code. This is generally the value of the constant
+        defined in the `Openlava <http://www.openlava.org/>`_ header file.
+
+        :return: The status code
+        :rtype: int
+
+
+    .. py:attribute:: friendly
+
+        A friendly name for the status, this is a short, human readable name.
+
+        :return: Human readable status name
+        :rtype: str
+
+    .. list-table:: Valid Statuses for Openlava Jobs
+        :header-rows: 1
+
+        * - Value
+          - Friendly Name
+          - Name
+          - Description
+        * - 0x01
+          - SUB_JOB_NAME
+          - Job submitted with name
+          - Submitted with a job name
+        * - 0x02
+          - SUB_QUEUE
+          - Job submitted with queue
+          -
+        * - 0x04
+          - SUB_HOST
+          - SUB_HOST
+          -
+        * - 0x08
+          - SUB_IN_FILE
+          - Job Submitted with input file
+          -
+        * - 0x10
+          - SUB_OUT_FILE
+          - Job submitted with output file
+          -
+        * - 0x20
+          - SUB_ERR_FILE
+          - Job submitted with error file
+          -
+        * - 0x40
+          - SUB_EXCLUSIVE
+          - Job submitted to run exclusively
+          -
+        * - 0x80
+          - SUB_NOTIFY_END
+          - SUB_NOTIFY_END
+          -
+        * - 0x100
+          - SUB_NOTIFY_BEGIN
+          - SUB_NOTIFY_BEGIN
+          -
+        * - 0x200
+          - SUB_USER_GROUP
+          - SUB_USER_GROUP
+          -
+        * - 0x400
+          - SUB_CHKPNT_PERIOD
+          - Job submitted with checkpoint period
+          -
+        * - 0x800
+          - SUB_CHKPNT_DIR
+          - Job submitted with checkpoint directory
+          -
+        * - 0x1000
+          - SUB_RESTART_FORCE
+          - SUB_RESTART_FORCE
+          -
+        * - 0x2000
+          - SUB_RESTART
+          - SUB_RESTART
+          -
+        * - 0x4000
+          - SUB_RERUNNABLE
+          - Job submitted as rerunnable
+          -
+        * - 0x8000
+          - SUB_WINDOW_SIG
+          - SUB_WINDOW_SIG
+          -
+        * - 0x10000
+          - SUB_HOST_SPEC
+          - Job submitted with host spec
+          -
+        * - 0x20000
+          - SUB_DEPEND_COND
+          - Job submitted with depend conditions
+          -
+        * - 0x40000
+          - SUB_RES_REQ
+          - Job submitted with resource request
+          -
+        * - 0x80000
+          - SUB_OTHER_FILES
+          - SUB_OTHER_FILES
+          -
+        * - 0x100000
+          - SUB_PRE_EXEC
+          - Job submitted with pre exec script
+          -
+        * - 0x200000
+          - SUB_LOGIN_SHELL
+          - Job submitted with login shell
+          -
+        * - 0x400000
+          - SUB_MAIL_USER
+          - Job submitted to email user
+          -
+        * - 0x800000
+          - SUB_MODIFY
+          - SUB_MODIFY
+          -
+        * - 0x1000000
+          - SUB_MODIFY_ONCE
+          - SUB_MODIFY_ONCE
+          -
+        * - 0x2000000
+          - SUB_PROJECT_NAME
+          - Job submitted to project
+          -
+        * - 0x4000000
+          - SUB_INTERACTIVE
+          - Job submitted as interactive
+          -
+        * - 0x8000000
+          - SUB_PTY
+          - SUB_PTY
+          -
+        * - 0x10000000
+          - SUB_PTY_SHELL
+          - SUB_PTY_SHELL
+          -
+      * - 0x01
+          - SUB2_HOLD
+          - SUB2_HOLD
+          -
+        * - 0x02
+          - SUB2_MODIFY_CMD
+          - SUB2_MODIFY_CMD
+          -
+        * - 0x04
+          - SUB2_BSUB_BLOCK
+          - SUB2_BSUB_BLOCK
+          -
+        * - 0x08
+          - SUB2_HOST_NT
+          - SUB2_HOST_NT
+          -
+        * - 0x10
+          - SUB2_HOST_UX
+          - SUB2_HOST_UX
+          -
+        * - 0x20
+          - SUB2_QUEUE_CHKPNT
+          - SUB2_QUEUE_CHKPNT
+          -
+        * - 0x40
+          - SUB2_QUEUE_RERUNNABLE
+          - SUB2_QUEUE_RERUNNABLE
+          -
+        * - 0x80
+          - SUB2_IN_FILE_SPOOL
+          - SUB2_IN_FILE_SPOOL
+          -
+        * - 0x100
+          - SUB2_JOB_CMD_SPOOL
+          - SUB2_JOB_CMD_SPOOL
+          -
+        * - 0x200
+          - SUB2_JOB_PRIORITY
+          - SUB2_JOB_PRIORITY
+          -
+        * - 0x400
+          - SUB2_USE_DEF_PROCLIMIT
+          - SUB2_USE_DEF_PROCLIMIT
+          -
+        * - 0x800
+          - SUB2_MODIFY_RUN_JOB
+          - SUB2_MODIFY_RUN_JOB
+          -
+        * - 0x1000
+          - SUB2_MODIFY_PEND_JOB
+          - SUB2_MODIFY_PEND_JOB
+          -
+
+    """
+
+
+
+class Process(OpenLavaObject):
+    """
+    Processes represent executing processes that are part of a job.  Where supported the scheduler may
+    keep track of processes spawned by the job.  Information about the process is returned in Process
+    classes.
+
+    .. py:attribute:: hostname
+
+        The name of the host that the process is running on.  This may not be available if the scheduler does not
+        track which hosts start which process.
+
+    .. py:attribute:: process_id
+
+        The numerical ID of the running process.
+
+    .. py:attribute:: extras
+
+        A list of extra field names that are available
+
+    """
+
+    def __str__(self):
+        return "%s:%s" % (self.hostname, self.process_id)
+
+    def __unicode__(self):
+        return u"%s" % self.__str__()
+
+    def __repr__(self):
+        return self.__str__()
+
 
 class Job(OpenLavaObject):
     """
