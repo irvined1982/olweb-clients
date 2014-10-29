@@ -2647,14 +2647,27 @@ class Job(OpenLavaObject):
         """
         self._exec_remote("/job/%s/%s/resume" % (self.job_id, self.array_index))
 
-    def requeue(self):
+    def requeue(self, **kwargs):
         """
         Requeues the job.  The user must be a job owner,  queue or cluster administrator for this operation to succeed.
+
+        :param bool hold:
+
+            When true, jobs will be held in the suspended pending state.
+
+            .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
 
         :return: None
         :raise: RemoteException on failure
         """
-        self._exec_remote("/job/%s/%s/requeue" % (self.job_id, self.array_index))
+
+        q = urllib.urlencode(kwargs)
+        if len(q) > 0:
+            q = "?%s" % q
+
+        self._exec_remote("/job/%s/%s/requeue%s" % (self.job_id, self.array_index, q))
 
     def suspend(self):
         """
