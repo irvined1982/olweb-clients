@@ -22,7 +22,6 @@ import cookielib
 import urllib
 import datetime
 import logging
-
 import tempfile
 
 
@@ -38,6 +37,66 @@ class AuthenticationError(RemoteServerError):
     """
     Raised when the client is unable to authenticate to the server
 
+    """
+    pass
+
+
+class NoSuchHostError(RemoteServerError):
+    """
+    Raised when the requested host does not exist in the job scheduling environment, or it is not visible/accessible
+    by the current user.
+    """
+    pass
+
+
+class NoSuchJobError(RemoteServerError):
+    """
+    Raised when the requested job does not exist in the job scheduling environment.  This can happen when the
+    job has been completed, and the scheduler has purged the job from the active jobs.
+    """
+    pass
+
+
+class NoSuchQueueError(RemoteServerError):
+    """
+    Raised when the requested queue does not exist in the job scheduling environment, or it is not visible/accessible
+    by the current user.
+    """
+    pass
+
+
+class NoSuchUserError(RemoteServerError):
+    """
+    Raised when the requested user does not exist in the job scheduling environment.
+    """
+    pass
+
+
+class ResourceDoesntExistError(RemoteServerError):
+    """
+    Raised when the requested resource does not exist in the job scheduling environment.
+    """
+    pass
+
+
+class ClusterInterfaceError(RemoteServerError):
+    """
+    Raised when the underlying API call fails, for example due to a network fault, or the job scheduler
+    being unavailable.
+    """
+    pass
+
+
+class PermissionDeniedError(RemoteServerError):
+    """
+    Raised when the current user does not have sufficiant privilages to perform for requested operation
+    """
+    pass
+
+
+class JobSubmitError(RemoteServerError):
+    """
+    Raised when a job cannot be submitted
     """
     pass
 
@@ -175,9 +234,13 @@ class OpenLavaConnection(object):
                 raise RemoteServerError("Response did not contain data attribute")
 
             if data['status'] != "OK":
+                exception_data = data['data']
+                for sc in RemoteServerError.__subclasses__():
+                    if sc.__name__ == exception_data['exception_class']:
+                        raise sc(exception_data['message'])
+                    
+                # No match
                 raise RemoteServerError("The operation failed: %s" % data['message'])
-
-            # TODO: Check the error and raise the correct exception if required
 
             return data['data']
 
@@ -272,14 +335,33 @@ class Host(OpenLavaObject):
 
         The type of cluster this host object is associated with.
 
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.cluster_type
+            u'openlava'
+
     .. py:attribute:: name
 
         The host name of the host.
 
         Example::
 
-            >>> from cluster.openlavacluster import Host
-            >>> host=Host.get_host_list()[0]
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
             >>> host.name
             u'...'
 
@@ -292,8 +374,14 @@ class Host(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import Host
-            >>> host=Host.get_host_list()[0]
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
             >>> host.name
             u'...'
 
@@ -306,13 +394,750 @@ class Host(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import Host
-            >>> host=Host.get_host_list()[0]
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
             >>> host.description
             u''
 
         :return: Host description
         :rtype: str
+
+    .. py:attribute:: load_information
+
+        Return load information on the host.  Load information is a collection of available metrics that describe
+        the current load of the host.  Such as the CPU usage, memory consumption, and available disk space.  These
+        vary based on the host type, operating system and scheduler.
+
+        The dict has three fields, names, short_names, and values, each a list of the same length.  Names
+        contains a list of field names, short_names contains a shorter version of the name, and values contains
+        the corresponding value of the field.  A value of -1 is unlimited.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> info=host.load_information
+            >>> for i in range(len(info['names'])):
+            ...     values = ""
+            ...     for v in info['values']:
+            ...         values += "%s(%s) " % (v['values'][i], v['name'])
+            ...     print "%s(%s): %s" % (info['names'][i], info['short_names'][i], values)
+            ...
+            15s Load(r15s): 0.0599999427795(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            1m Load(r1m): 0.039999961853(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            15m Load(r15m): 0.0499999523163(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            Avg CPU Utilization(ut): 0.0759999975562(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            Paging Rate (Pages/Sec)(pg): 0.0(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            Disk IO Rate (MB/Sec)(io): 0.0(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            Num Users(ls): 3.0(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            Idle Time(it): 1.0(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            Tmp Space (MB)(tmp): 54141.0(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            Free Swap (MB)(swp): 507.03125(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+            Free Memory (MB)(mem): 625.3515625(Actual Load) -1(Stop Dispatching Load) -1(Stop Executing Load)
+
+        :returns: dictionary of load index dictionaries
+        :rtype: dictionary
+
+    .. py:attribute:: admins
+
+        Gets the host administrators.  Host administrators can perform any action on the host.
+        This does not imply they are actual superusers on the physical systems.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.admins
+            [u'openlava']
+
+        :returns: Array of usernames
+        :rtype: array
+        :raise: OpenLavaError on failure
+
+    .. py:attribute:: is_busy
+
+        Returns True if the host is busy.  Busy is defined as a host that is running jobs.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.is_busy
+            False
+
+        :return: True if the host is busy.
+        :rtype: bool
+
+    .. py:attribute:: is_down
+
+        Returns True if the host is down. Down is defined as not being available to the scheduler.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.is_down
+            False
+
+        :return: True if the host is down.
+        :rtype: bool
+
+    .. py:attribute:: is_closed
+
+        Returns True if the host is closed for new jobs.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.is_closed
+            False
+
+        :return: True if the host is closed.
+        :rtype: bool
+
+    .. py:attribute:: has_checkpoint_support
+
+        Returns True if the host supports checkpointing.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.has_checkpoint_support
+            True
+
+        :return: True if checkpoint support is enabled
+        :rtype: bool
+
+    .. py:attribute:: host_model
+
+        String containing host model information
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.host_model
+            u'IntelI5'
+
+        :return: Host model name
+        :rtype: str
+
+    .. py:attribute:: host_type
+
+        String containing host type information.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.host_type
+            u'linux'
+
+        :return: Host Type
+        :rtype: str
+
+    .. py:attribute:: resources
+
+        Gets a list of resources that are available on this host.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.resources
+            [foo]
+
+        :return: List of :py:class:`cluster.openlavacluster.Resource` objects
+        :rtype: :py:class:`cluster.openlavacluster.Resource`
+
+    .. py:attribute:: max_jobs
+
+        Returns the maximum number of jobs that may execute on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.max_jobs
+            2
+
+        :return: Maximum number of jobs
+        :rtype: int
+
+    .. py:attribute:: max_processors
+
+        Returns the maximum number of processors (Job Slots) available on the host for all jobs.
+
+        .. note::
+            If max_slots is greater than max_processors, then there will be contention for physical cores.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.max_processors
+            1
+
+        :return: Max processors (Slots)
+        :rtype: int
+
+    .. py:attribute:: max_ram
+
+        Max Ram that can be consumed by jobs, in Kb
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.max_ram
+            992
+
+        :return: Max Ram (Mb)
+        :rtype: int
+
+    .. py:attribute:: max_slots
+
+        Returns the maximum number of scheduling slots that may be consumed on this host
+
+        .. note::
+            If max_slots is greater than max_processors, then there will be contention for physical cores.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.max_slots
+            2
+
+        :return: Max slots
+        :rtype: int
+
+    .. py:attribute:: max_swap
+
+        Max swap space that may be consumed by jobs on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.max_swap
+            509
+
+        :return: Max Swap Space (Mb)
+        :rtype: int
+
+    .. py:attribute:: max_tmp
+
+        Max swap space that may be consumed by jobs on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.max_tmp
+            64002
+
+        :return: Max Swap (Mb)
+        :rtype: int
+
+    .. py:attribute:: num_reserved_slots
+
+        Returns the number of scheduling slots that are reserved
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.num_reserved_slots
+            0
+
+        :return: Number of reserved slots
+        :rtype: int
+
+    .. py:attribute:: num_running_jobs
+
+        Returns the number of concurent jobs that are executing on the host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.num_running_jobs
+            0
+
+        :return: Job count
+        :rtype: int
+
+    .. py:attribute:: num_running_slots
+
+        Returns the total number of scheduling slots that are consumed on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.num_running_slots
+            0
+
+        :return: slot count
+        :rtype: int
+
+    .. py:attribute:: num_suspended_jobs
+
+        Returns the number of jobs that are suspended on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.num_suspended_jobs
+            0
+
+        :return: Suspended job count
+        :rtype: int
+
+    .. py:attribute:: num_suspended_slots
+
+        Returns the number of scheduling slots that are suspended on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.num_suspended_slots
+            0
+
+        :return: suspended slot count
+        :rtype: int
+
+    .. py:attribute:: run_windows
+
+        Openlava run windows that are defined in the hosts configuration
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.run_windows
+            u'-'
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: Run Windows
+        :rtype: str
+
+    .. py:attribute:: statuses
+
+        Hosts can have one or more statuses that apply.  Statuses indicate the condition of the host, such as its
+        availability, and health.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.statuses
+            [HOST_STAT_OK]
+
+        :return: List of statuses that apply to hist host
+        :rtype: list of :py:class:`cluster.openlavacluster.JobStatus` objects
+
+    .. py:attribute:: total_jobs
+
+        Returns the total number of jobs that are running on this host, including suspended jobs.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.total_jobs
+            0
+
+        :return: running job count
+        :rtype: int
+
+    .. py:attribute:: total_slots
+
+        Returns the total number of slots that are consumed on this host, including those from  suspended jobs.
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.total_slots
+            0
+
+        :return: consumed slot count
+        :rtype: int
+
+        .. py:attribute:: cpu_factor
+
+        Returns the CPU factor of the host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.cpu_factor
+            100.0
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: CPU Factor of the host
+        :rtype: float
+
+    .. py:attribute:: is_server
+
+        True if host is an openlava server (as opposed to submission host)
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.is_server
+            True
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: True if host can run jobs
+        :rtype: bool
+
+    .. py:attribute:: num_disks
+
+        Openlava specific: Returns the number of physical disks installed in the machine
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.num_disks
+            0
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: Num physical disks
+        :rtype: int
+        
+    .. py:attribute:: num_user_suspended_jobs
+
+        Returns the number of jobs that have been suspended by the user on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.num_user_suspended_jobs
+            0
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: user suspended job count
+        :rtype: int
+
+    .. py:attribute:: num_user_suspended_jobs
+
+        Returns the number of scheduling slots that have been suspended by the user on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.num_user_suspended_slots
+            0
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: user suspened slot count
+        :rtype: int
+
+    .. py:attribute:: num_system_suspended_jobs
+
+        Returns the number of jobs that have been suspended by the system on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]            
+            >>> host.num_system_suspended_jobs
+            0
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: system suspended job count
+        :rtype: int
+
+    .. py:attribute:: num_system_suspended_slots
+
+        Returns the number of scheduling slots that have been suspended by the system on this host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]
+            >>> host.num_system_suspended_slots
+            0
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: system suspended slot count
+        :rtype: int
+
+    .. py:attribute:: has_kernel_checkpoint_copy
+
+        Returns true if the host supports kernel checkpointing
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]            
+            >>> host.has_kernel_checkpoint_copy
+            False
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: True if kernel can checkpoint
+        :rtype: bool
+
+    .. py:attribute:: max_slots_per_user
+
+        Returns the maximum slots that a user can occupy on the host
+
+        Example::
+
+            >>> from olwclient import OpenLavaConnection, Host
+            >>> class ConnectionArgs:
+            ...  username="testuser"
+            ...  password="password"
+            ...  url="http://example.com/olweb/"
+            ...
+            >>> c=OpenLavaConnection(ConnectionArgs)
+            >>> host=Host.get_host_list(c)[0]            
+            >>> host.max_slots_per_user
+            2147483647
+
+        .. note::
+
+            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+
+        :return: Max slots per user
+        :rtype: int
 
 """
 
@@ -334,7 +1159,7 @@ class Host(OpenLavaObject):
         :returns: List of Host objects
         :rtype: list
 
-     """
+"""
         if len(host_names) == 1 and host_names[0] == "all":
             hosts = cls.get_host_list(connection)
         elif len(host_names) == 0:
@@ -349,8 +1174,6 @@ class Host(OpenLavaObject):
         """
         Get all hosts that are part of the cluster.
 
-        :param connection: Connection object
-
         Example::
 
             >>> from cluster.openlavacluster import Host
@@ -359,7 +1182,9 @@ class Host(OpenLavaObject):
             [master, comp00, comp01, comp02, comp03, comp04]
 
         :return: List of :py:class:`cluster.openlavacluster.Host` Objects, one for each host on the cluster.
-        :rtype: list"""
+        :rtype: list
+
+        """
         url = connection.url + "/hosts"
         request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
         try:
@@ -369,6 +1194,16 @@ class Host(OpenLavaObject):
             raise
 
     def __init__(self, connection, host_name=None, data=None):
+        """
+        Retrieve Host information and perform administrative actions on hosts on the cluster.  Hosts are any kind
+        of host associated with the cluster, they may be submit hosts, execution hosts, clients, etc.
+
+        :param connection:
+        :param host_name:
+        :param data:
+        :return:
+        """
+
         if host_name:
             url = connection.url + "/hosts/%s?json=1" % host_name
             req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
@@ -379,50 +1214,77 @@ class Host(OpenLavaObject):
             raise ValueError("Data must be a dict")
         if data['type'] not in ["Host", "ExecutionHost"]:
             raise ValueError("data is not of type Host")
+        if 'jobs' in data:
+            del(data['jobs']) # jobs is a method, not a property.
+
         OpenLavaObject.__init__(self, connection, data=data)
         self.resources = [Resource(self._connection, data=res) for res in self.resources]
         self.statuses = [Status(self._connection, data=status) for status in self.statuses]
-        self.load_information = LoadInformation(self._connection, data=self.load_information)
-        self.load_information.values = [LoadValueList(self._connection, data=l) for l in self.load_information.values]
 
 
-    def jobs(self):
-        """Return a list of Jobs that are executing on the Host.
+    def jobs(self, **kwargs):
         """
-        raise NotImplementedError
+        Returns matching jobs on the host.  By default, returns all jobs that are executing on the host.
+
+        .. note::
+
+            This performs a request to the server to get the current jobs executing. It does not use
+            the short job list returned by the initial host call.  This mirrors the behavior
+            of the local class.
+
+        Example::
+
+            >>> from cluster.openlavacluster import Host
+            >>> host=Host.get_host_list()[0]
+            >>> host.jobs()
+            [9790]
+
+        :param job_id: Only return jobs matching the specified job id.
+        :param job_name: Only return jobs matching the specified job name.
+        :param user: Only return jobs belonging to the specified user.
+        :param queue: Only return jobs belonging to the specified queue.
+        :param options: Unused.
+        :return: List of :py:class:`cluster.openlavacluster.Job` objects
+        """
+
+        return Job.get_job_list(self._connection, host_name=self.name, **kwargs)
 
     def close(self):
-        """Close the host, no new jobs will be scheduled"""
+        """
+        Closes the host, when a host is closed, it will no longer accept new jobs.
+
+        Example::
+
+            >>> from cluster.openlavacluster import Host
+            >>> host=Host.get_host_list()[0]
+            >>> host.close()
+            Traceback (most recent call last):
+              ...
+            cluster.PermissionDeniedError: Unable to close host: master: User permission denied
+
+        :return: 0 on success
+        :raises: :py:exc:`cluster.openlavacluster.RemoteServerError` when host cannot be closed.
+        """
         self._exec_remote("/hosts/%s/close" % self.host_name)
 
     def open(self):
-        """Open the host for scheduling"""
+        """
+                Opens the host, when a host is closed, it will no longer accept new jobs.
+
+        Example::
+
+            >>> from cluster.openlavacluster import Host
+            >>> host=Host.get_host_list()[0]
+            >>> host.open()
+            Traceback (most recent call last):
+              ...
+            cluster.PermissionDeniedError: Unable to open host: master: User permission denied
+
+        :return: 0 on success
+        :raises: :py:exc:`cluster.openlavacluster.RemoteServerError` when host cannot be opened.
+
+    """
         self._exec_remote("/hosts/%s/open" % self.host_name)
-
-
-class NoSuchObjectError(Exception):
-    """Indicates that the requested object does not exist on the remote server"""
-    pass
-
-
-class LoadInformation(OpenLavaObject):
-    pass
-
-
-class LoadValueList(OpenLavaObject):
-    pass
-
-
-class RemoteException(Exception):
-    """Indicates an exception hapenned on the remote server"""
-
-    def __init__(self, data):
-        Exception.__init__(self, data['message'])
-        for k, v in data.iteritems():
-            setattr(self, k, v)
-
-
-
 
 
 class Status(OpenLavaObject, StatusType):
@@ -741,25 +1603,25 @@ Total number of slots consumed by jobs in the queue.
     def close(self):
         """Closes the queue.  The user must be a queue or cluster administrator for this operation to succeed.
 
-        :raise: RemoteException on failure"""
+        :raise: RemoteServerError on failure"""
         self._exec_remote("/queues/%s/close" % self.name)
 
     def open(self):
         """Opens the queue.  The user must be a queue or cluster administrator for this operation to succeed.
 
-        :raise: RemoteException on failure"""
+        :raise: RemoteServerError on failure"""
         self._exec_remote("/queues/%s/open" % self.name)
 
     def inactivate(self):
         """Inactivates the queue.  The user must be a queue or cluster administrator for this operation to succeed.
 
-        :raise: RemoteException on failure"""
+        :raise: RemoteServerError on failure"""
         self._exec_remote("/queues/%s/inactivate" % self.name)
 
     def activate(self):
         """Activates the queue.  The user must be a queue or cluster administrator for this operation to succeed.
 
-        :raise: RemoteException on failure"""
+        :raise: RemoteServerError on failure"""
         self._exec_remote("/queues/%s/activate" % self.name)
 
 
@@ -2634,7 +3496,7 @@ class Job(OpenLavaObject):
         Kills the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
 
         :return: None
-        :raise: RemoteException on failure
+        :raise: RemoteServerError on failure
         """
         self._exec_remote("/job/%s/%s/kill" % (self.job_id, self.array_index))
 
@@ -2643,7 +3505,7 @@ class Job(OpenLavaObject):
         Resumes the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
 
         :return: None
-        :raise: RemoteException on failure
+        :raise: RemoteServerError on failure
         """
         self._exec_remote("/job/%s/%s/resume" % (self.job_id, self.array_index))
 
@@ -2660,7 +3522,7 @@ class Job(OpenLavaObject):
             Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
 
         :return: None
-        :raise: RemoteException on failure
+        :raise: RemoteServerError on failure
         """
 
         q = urllib.urlencode(kwargs)
@@ -2674,7 +3536,7 @@ class Job(OpenLavaObject):
         Suspends the job.  The user must be a job owner, queue or cluster administrator for this operation to succeed.
 
         :return: None
-        :raise: RemoteException on failure
+        :raise: RemoteServerError on failure
         """
         self._exec_remote("/job/%s/%s/suspend" % (self.job_id, self.array_index))
 
@@ -2807,4 +3669,4 @@ class Job(OpenLavaObject):
         return [cls(connection, data=i) for i in data]
 
 
-__ALL__ = [OpenLavaConnection, AuthenticationError, RemoteException, NoSuchObjectError, Host, Job, ExecutionHost]
+__ALL__ = [OpenLavaConnection, AuthenticationError, Host, Job, ExecutionHost]
