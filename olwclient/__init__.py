@@ -1169,7 +1169,6 @@ class Host(OpenLavaObject):
             hosts = [cls(connection, host_name=host_name) for host_name in host_names]
         return hosts
 
-
     @classmethod
     def get_host_list(cls, connection):
         """
@@ -1216,7 +1215,7 @@ class Host(OpenLavaObject):
         if data['type'] not in ["Host", "ExecutionHost"]:
             raise ValueError("data is not of type Host")
         if 'jobs' in data:
-            del(data['jobs']) # jobs is a method, not a property.
+            del(data['jobs'])  # jobs is a method, not a property.
 
         OpenLavaObject.__init__(self, connection, data=data)
         self.resources = [Resource(self._connection, data=res) for res in self.resources]
@@ -1802,7 +1801,6 @@ class JobOption(OpenLavaObject, StatusType):
           -
 
     """
-
 
 
 class Process(OpenLavaObject):
@@ -3452,4 +3450,4 @@ class Job(OpenLavaObject):
         return [cls(connection, data=i) for i in data]
 
 
-__ALL__ = [OpenLavaConnection, AuthenticationError, Host, Job, ExecutionHost]
+__ALL__ = [OpenLavaConnection, RemoteServerError, AuthenticationError, Host, Job, ExecutionHost]
