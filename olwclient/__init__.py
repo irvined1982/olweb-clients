@@ -1221,6 +1221,10 @@ class Host(OpenLavaObject):
         self.resources = [Resource(self._connection, data=res) for res in self.resources]
         self.statuses = [Status(self._connection, data=status) for status in self.statuses]
 
+    @property
+    def name(self):
+        return self.host_name
+    
     def jobs(self, **kwargs):
         """
         Returns matching jobs on the host.  By default, returns all jobs that are executing on the host.
