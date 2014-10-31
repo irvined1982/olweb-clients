@@ -1221,9 +1221,6 @@ class Host(OpenLavaObject):
         self.resources = [Resource(self._connection, data=res) for res in self.resources]
         self.statuses = [Status(self._connection, data=status) for status in self.statuses]
 
-    @property
-    def name(self):
-        return self.host_name
 
     def jobs(self, **kwargs):
         """
@@ -3206,7 +3203,7 @@ class Job(OpenLavaObject):
 
         """
         return self._queue['name']
-        
+
 
     @property
     def submission_host(self):
