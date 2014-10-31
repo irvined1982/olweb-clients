@@ -242,19 +242,23 @@ class OpenLavaConnection(object):
             return data['data']
 
         except urllib2.HTTPError as e:
-            if e.code == 404:
-                raise RemoteServerError("Invalid server URL, or misconfigured web server")
-            if e.code == 403:
+            if e.code in [400, 401, 403, 404, 500]:
                 try:
-                    data = json.load(e)
-
-                    raise AuthenticationError(data['message'])
-                except AttributeError:
-                    raise AuthenticationError("Unknown authentication failure, check server logs")
-            if e.code == 500:
-                f = tempfile.NamedTemporaryFile(delete=False)
-                f.write(e.read())
-                raise RemoteServerError("Server returned error 500, output stored in: %s" % f.name)
+                    exception_data = json.load(e)
+                    exception_data = exception_data['data']
+                    for sc in RemoteServerError.__subclasses__():
+                        if sc.__name__ == exception_data['exception_class']:
+                            raise sc(exception_data['message'])
+                    raise RemoteServerError("The operation failed: %s" % data['message'])
+                except Exception:
+                    if e.code == 403:
+                        raise AuthenticationError("Unknown authentication failure, check server logs")
+                    elif e.code == 500:
+                        f = tempfile.NamedTemporaryFile(delete=False)
+                        f.write(e.read())
+                        raise RemoteServerError("Server returned error 500, output stored in: %s" % f.name)
+                    else:
+                        raise RemoteServerError("Invalid server URL, or misconfigured web server")
             raise
 
     def open(self, request):
