@@ -1224,7 +1224,7 @@ class Host(OpenLavaObject):
     @property
     def name(self):
         return self.host_name
-    
+
     def jobs(self, **kwargs):
         """
         Returns matching jobs on the host.  By default, returns all jobs that are executing on the host.
@@ -3205,7 +3205,8 @@ class Job(OpenLavaObject):
         :rtype: Queue
 
         """
-        return Queue(self._connection, queue_name=self._queue['name'])
+        return self._queue['name']
+        
 
     @property
     def submission_host(self):
