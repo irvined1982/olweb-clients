@@ -215,7 +215,6 @@ class OpenLavaConnection(object):
             # Check the content type is correct
             for header in response.info().headers:
                 if header.startswith("Content-Type") and not header.startswith("Content-Type: application/json"):
-                    print response.read()
                     raise RemoteServerError(
                         "Expected a content_type of application/json however the header was: %s" % header)
 
@@ -256,6 +255,7 @@ class OpenLavaConnection(object):
                     elif e.code == 500:
                         f = tempfile.NamedTemporaryFile(delete=False)
                         f.write(e.read())
+                        f.close()
                         raise RemoteServerError("Server returned error 500, output stored in: %s" % f.name)
                     else:
                         raise RemoteServerError("Invalid server URL, or misconfigured web server")
