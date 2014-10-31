@@ -1327,7 +1327,6 @@ class Queue(OpenLavaObject):
             queues = cls.get_queue_list(connection)
         elif len(queue_names) == 0:
             raise NotImplementedError("Must check cluster for default queue")
-            # queues = [cls(connection, queue_name=socket.gethostname())]
         else:
             queues = [cls(connection, queue_name=queue_name) for queue_name in queue_names]
         return queues
@@ -1338,16 +1337,15 @@ class Queue(OpenLavaObject):
 
         :returns: List of Queue objects
         :rtype: list
+        :raise: RemoteServerError
 
         """
         url = connection.url + "/queues/"
         request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
         try:
-            data = connection.open(request).read()
-            data = json.loads(data)
+            data = connection.open(request)
             if not isinstance(data, list):
-                print "Got strange data back"
-                data = []
+                raise RemoteServerError("Invalid data returned from server")
             return [cls(connection, data=i) for i in data]
         except:
             raise
@@ -1361,49 +1359,82 @@ class Queue(OpenLavaObject):
         if queue_name:
             url = connection.url + "/queues/%s" % queue_name
             req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
-            try:
-                data = connection.open(req).read()
-                data = json.loads(data)
-            except urllib2.HTTPError as e:
-                if e.code == 404:
-                    raise NoSuchObjectError("No such queue: %s" % queue_name)
-                else:
-                    raise
+            data = connection.open(req)
+
         if not isinstance(data, dict):
             raise ValueError("Data must be a dict")
+
         if data['type'] != "Queue":
             raise ValueError("data is not of type Queue")
+
         OpenLavaObject.__init__(self, connection, data=data)
         self.attributes = [Status(self._connection, data=attr) for attr in self.attributes]
         self.statuses = [Status(self._connection, data=status) for status in self.statuses]
-        # runtime limits
+        self.runtime_limits = [ResourceLimit(self._connection, data=d) for d in self.runtime_limits]
 
-    def jobs(self):
-        """Returns a list of SimpleJob objects."""
-        raise NotImplementedError
+    def jobs(self, **kwargs):
+        """
+        Returns matching jobs on the queue.  By default, returns all jobs that are executing on the queue.
+
+        Example::
+
+            >>> from cluster.openlavacluster import Queue
+            >>> queue = Queue.get_queue_list()[0]
+            >>> queue.jobs()
+            [9790]
+
+        :param job_id: Only return jobs matching the specified job id.
+        :param job_name: Only return jobs matching the specified job name.
+        :param user: Only return jobs belonging to the specified user.
+        :param _name: Only return jobs executing on the specified host.
+        :param options: Unused.
+        :return: List of :py:class:`cluster.openlavacluster.Job` objects
+
+        """
+        return Job.get_job_list(queue_name=self.name, **kwargs)
 
     def close(self):
-        """Closes the queue.  The user must be a queue or cluster administrator for this operation to succeed.
+        """
+        Closes the queue, once closed no new jobs will be accepted.
 
-        :raise: RemoteServerError on failure"""
+        The user must be a queue administrator for this operation to succeed.
+
+        :raises :py:exc:`olwclient.PermissionDeniedError`: The user does not have permission to perform this operation.
+
+        """
         self._exec_remote("/queues/%s/close" % self.name)
 
     def open(self):
-        """Opens the queue.  The user must be a queue or cluster administrator for this operation to succeed.
+        """
+        Opens the queue, once open new jobs will be accepted.
 
-        :raise: RemoteServerError on failure"""
+        The user must be a queue administrator for this operation to succeed.
+
+        :raises :py:exc:`olwclient.PermissionDeniedError`: The user does not have permission to perform this operation.
+
+        """
         self._exec_remote("/queues/%s/open" % self.name)
 
     def inactivate(self):
-        """Inactivates the queue.  The user must be a queue or cluster administrator for this operation to succeed.
+        """
+        Inactivates the queue, when inactive jobs will no longer be dispatched.
 
-        :raise: RemoteServerError on failure"""
+        The user must be a queue administrator for this operation to succeed.
+
+        :raises :py:exc:`olwclient.PermissionDeniedError`: The user does not have permission to perform this operation.
+
+        """
         self._exec_remote("/queues/%s/inactivate" % self.name)
 
     def activate(self):
-        """Activates the queue.  The user must be a queue or cluster administrator for this operation to succeed.
+        """
+        Activates the queue, when active, jobs will be dispatched to hosts for execution.
 
-        :raise: RemoteServerError on failure"""
+        The user must be a queue administrator for this operation to succeed.
+
+        :raises :py:exc:`olwclient.PermissionDeniedError`: The user does not have permission to perform this operation.
+
+        """
         self._exec_remote("/queues/%s/activate" % self.name)
 
 
