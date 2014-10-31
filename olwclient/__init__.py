@@ -250,8 +250,8 @@ class OpenLavaConnection(object):
                             raise sc(exception_data['message'])
                     raise RemoteServerError("The operation failed: %s" % data['message'])
                 except Exception:
-                    if e.code == 403:
-                        raise AuthenticationError("Unknown authentication failure, check server logs")
+                    if e.code == 403 and self.authenticated:
+                        raise PermissionDeniedError("Unknown authentication failure, check server logs")
                     elif e.code == 500:
                         f = tempfile.NamedTemporaryFile(delete=False)
                         f.write(e.read())
