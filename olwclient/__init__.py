@@ -1368,6 +1368,7 @@ class Queue(OpenLavaObject):
         if data['type'] != "Queue":
             raise ValueError("data is not of type Queue")
 
+        del data['jobs']  # Handled by method, not returned data.
         OpenLavaObject.__init__(self, connection, data=data)
         self.attributes = [Status(self._connection, data=attr) for attr in self.attributes]
         self.statuses = [Status(self._connection, data=status) for status in self.statuses]
