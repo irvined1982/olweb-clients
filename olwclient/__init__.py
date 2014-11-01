@@ -1378,7 +1378,6 @@ class User(OpenLavaObject):
 
         :param job_id: Only return jobs matching the specified job id.
         :param job_name: Only return jobs matching the specified job name.
-
         :param host_name: Only return jobs executing on the specified host.
         :param queue_name: Only return jobs executing on the specified host.
         :param options: Unused.
