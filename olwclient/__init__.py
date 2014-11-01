@@ -1310,6 +1310,84 @@ class Status(OpenLavaObject, StatusType):
     """
 
 
+class User(OpenLavaObject):
+    """
+
+
+    """
+
+    @classmethod
+    def get_user_list(cls, connection):
+        """
+        Returns a list of User objects that are available.
+
+        :returns: List of User objects
+        :rtype: list
+        :raise: RemoteServerError
+
+        """
+        url = connection.url + "/users/"
+        request = urllib2.Request(url, None, {'Content-Type': 'application/json'})
+        try:
+            data = connection.open(request)
+            if not isinstance(data, list):
+                raise RemoteServerError("Invalid data returned from server")
+            return [cls(connection, data=i) for i in data]
+        except:
+            raise
+
+    def __init__(self, connection, user_name=None, data=None):
+        """
+        :param OpenLavaConnection connection: The connection instance to use
+        :param str user_name: name of user to load from remote server
+        :param dict data: pre-populated dictionary of user data
+        """
+        if user_name:
+            url = connection.url + "/users/%s" % user_name
+            req = urllib2.Request(url, None, {'Content-Type': 'application/json'})
+            data = connection.open(req)
+
+        if not isinstance(data, dict):
+            raise ValueError("Data must be a dict")
+
+        if data['type'] != "User":
+            raise ValueError("data is not of type User")
+
+        del data['jobs']  # Handled by method, not returned data.
+        OpenLavaObject.__init__(self, connection, data=data)
+
+    def __str__(self):
+        return "%s" % self.name
+
+    def __unicode__(self):
+        return u"%s" % self.__str__()
+
+    def __repr__(self):
+        return self.__str__()
+
+    def jobs(self, **kwargs):
+        """
+        Returns matching jobs for this user.  By default, returns all jobs that are submitted by this user.
+
+        Example::
+
+            >>> from cluster.openlavacluster import User
+            >>> user = User.get_queue_list()[0]
+            >>> user.jobs()
+            [9790]
+
+        :param job_id: Only return jobs matching the specified job id.
+        :param job_name: Only return jobs matching the specified job name.
+
+        :param host_name: Only return jobs executing on the specified host.
+        :param queue_name: Only return jobs executing on the specified host.
+        :param options: Unused.
+        :return: List of :py:class:`.Job` objects
+
+        """
+        return Job.get_job_list(user_name=self.name, **kwargs)
+
+
 class Queue(OpenLavaObject):
     """
 
