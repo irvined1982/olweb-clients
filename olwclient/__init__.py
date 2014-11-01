@@ -1788,7 +1788,7 @@ class JobOption(OpenLavaObject, StatusType):
           - SUB_PTY_SHELL
           - SUB_PTY_SHELL
           -
-      * - 0x01
+        * - 0x01
           - SUB2_HOLD
           - SUB2_HOLD
           -
