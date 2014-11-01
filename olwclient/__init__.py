@@ -1373,6 +1373,15 @@ class Queue(OpenLavaObject):
         self.statuses = [Status(self._connection, data=status) for status in self.statuses]
         self.runtime_limits = [ResourceLimit(self._connection, data=d) for d in self.runtime_limits]
 
+    def __str__(self):
+        return "%s" % self.name
+
+    def __unicode__(self):
+        return u"%s" % self.__str__()
+
+    def __repr__(self):
+        return self.__str__()
+
     def jobs(self, **kwargs):
         """
         Returns matching jobs on the queue.  By default, returns all jobs that are executing on the queue.
