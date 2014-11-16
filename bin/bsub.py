@@ -17,9 +17,6 @@
 # along with olwclients. If not, see <http://www.gnu.org/licenses/>.
 import argparse
 from olwclient import *
-import os
-import getpass
-import re
 import sys
 
 parser = argparse.ArgumentParser(description='Displays information about hosts')
@@ -29,22 +26,27 @@ parser.add_argument("-B", action='append_const', const=0x100, dest="options",
                     help="Sends mail to you when the job is dispatched and begins execution.")
 
 parser.add_argument("-H", action='append_const', const=0x01, dest="options2",
-                    help="Holds the job in the PSUSP state when the job is submitted. The job will not be scheduled until you tell the system to resume the job.")
+                    help="Holds the job in the PSUSP state when the job is submitted. The job will not be scheduled \
+                    until you tell the system to resume the job.")
 
 parser.add_argument("-N", action='append_const', const=0x80, dest="options",
-                    help="Sends the job report to you by mail when the job finishes. When used without any other options, behaves the same as the default.")
+                    help="Sends the job report to you by mail when the job finishes. When used without any other \
+                    options, behaves the same as the default.")
 
 parser.add_argument("-r", action='append_const', const=0x4000, dest="options",
-                    help="If  the  execution host becomes unavailable while a job is running, specifies that the job will rerun on another host.")
+                    help="If  the  execution host becomes unavailable while a job is running, specifies that the \
+                    job will rerun on another host.")
 
 parser.add_argument("-x", action='append_const', const=0x40, dest="options",
                     help="Puts the host running your job into exclusive execution mode.")
 
 parser.add_argument("-n", dest="procs", default="1",
-                    help="Submits a parallel job and specifies the minimum and maximum numbers of processors required to run the job")
+                    help="Submits a parallel job and specifies the minimum and maximum numbers of processors required \
+                    to run the job")
 
 parser.add_argument("-J", dest="job_name", default=None,
-                    help="Assigns the specified name to the job, and, for job arrays, specifies the indices of the job array and optionally the maximum number of jobs that can run at any given time.")
+                    help="Assigns the specified name to the job, and, for job arrays, specifies the indices of the job \
+                    array and optionally the maximum number of jobs that can run at any given time.")
 
 parser.add_argument("-q", dest="queue_name", default=None, help="Submits the job to the specified queues.")
 
@@ -75,8 +77,8 @@ if args.options2:
 payload = {
     "options": options,
     "options2": options2,
-    "num_processors": min_processors,
-    "max_num_processors": max_processors,
+    "requested_slots": min_processors,
+    "max_requested_slots": max_processors,
     "command": command,
 }
 
@@ -89,11 +91,10 @@ if args.job_name:
 connection.login()
 
 try:
-    j = Job.submit(connection, **payload)
-    print "Job: %s[%s] was submitted." % (j.job_id, j.array_index)
-except RemoteException as e:
-    print "Error: %s" % e.message
-except KeyError as e:
-    print e.read()
+    jobs = Job.submit(connection, **payload)
+    for j in jobs:
+        print "Job: %s[%s] was submitted." % (j.job_id, j.array_index)
 
-
+except RemoteServerError, e:
+    print "Unable to submit job: %s" % e.message
+    sys.exit(1)

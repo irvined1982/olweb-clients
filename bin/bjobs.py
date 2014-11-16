@@ -16,10 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with olwclients. If not, see <http://www.gnu.org/licenses/>.
 import argparse
-from olwclient import *
 import getpass
 import re
 import sys
+
+from olwclient import *
 
 
 def print_long():
@@ -31,7 +32,7 @@ def print_long():
             job_id = "%s[%s]" % (job.job_id, job.array_index)
 
         row = "Job <%s>, User <%s>, Project <%s>, Status <%s>, Queue <%s>, Command <%s>" % (
-            job_id, job.user_name, job.project_names[0], status, job.queue.name, job.command)
+            job_id, job.user_name, job.project_names[0], status, job.queue, job.command)
 
         if len(row) > 80:
             print row[:80]
@@ -89,7 +90,7 @@ def print_short():
             job_id,
             job.user_name,
             status,
-            job.queue.name,
+            job.queue,
             job.submission_host.name,
             " ".join([x.name for x in job.execution_hosts]),
             job.name,
@@ -130,36 +131,41 @@ def print_wide():
         if job.array_index != 0:
             job_id = "%s[%s]" % (job.job_id, job.array_index)
 
-        print "%-7s %-7s %-5s %-10s %-11s %-11s %-11s %-12s" % (
+        print "{0:<7s} {1:<7s} {2:<5s} {3:<10s} {4:<11s} {5:<11s} {6:<11s} {7:<12s}".format(
             job_id,
             job.user_name,
             status,
-            job.queue.name,
+            job.queue,
             job.submission_host.name,
             " ".join([x.name for x in job.execution_hosts]),
             job.name,
-            job.submit_time_datetime,
-        )
+            job.submit_time_datetime, )
 
 
 parser = argparse.ArgumentParser(description='Displays information about hosts')
 OpenLavaConnection.configure_argument_list(parser)
 
 parser.add_argument("-a", action='store_const', const="ALL", dest="job_state",
-                    help="Displays  information  about  jobs in all states, including finished jobs that finished recently, within an interval specified by CLEAN_PERIOD in lsb.params")
+                    help="Displays  information  about  jobs in all states, including finished jobs that finished \
+                    recently, within an interval specified by CLEAN_PERIOD in lsb.params")
 parser.add_argument("-d", action='store_const', const="EXIT", dest="job_state",
-                    help="Displays information about jobs that finished recently, within an interval specified by CLEAN_PERIOD in lsb.params")
+                    help="Displays information about jobs that finished recently, within an interval specified by \
+                    CLEAN_PERIOD in lsb.params")
 parser.add_argument("-p", action='store_const', const="PEND", dest="job_state",
-                    help="Displays  pending  jobs, together with the pending reasons that caused each job not to be dispatched during the last dispatch turn. The pending reason shows the number of hosts for that reason, or names the hosts if -l is also specified.")
+                    help="Displays  pending  jobs, together with the pending reasons that caused each job not to be \
+                    dispatched during the last dispatch turn. The pending reason shows the number of hosts for that \
+                    reason, or names the hosts if -l is also specified.")
 parser.add_argument("-r", action='store_const', const="RUN", dest="job_state", help="Displays running jobs.")
 parser.add_argument("-s", action='store_const', const="SUSP", dest="job_state",
-                    help="Displays suspended jobs, together with the suspending reason that caused each job to become suspended.")
+                    help="Displays suspended jobs, together with the suspending reason that caused each job to become \
+                    suspended.")
 parser.add_argument("-w", action='store_true', dest="wide",
                     help="Displays queue information in wide format. Fields are displayed without truncation.")
 parser.add_argument("-l", action='store_true', dest="long",
                     help="Displays queue information in a (long) multi-line format. ")
 parser.add_argument("-u", dest="user_name", default=getpass.getuser(),
-                    help="Only displays jobs that have been submitted by the specified users. The keyword all specifies all users")
+                    help="Only displays jobs that have been submitted by the specified users. The keyword all \
+                    specifies all users")
 parser.add_argument("job_ids", nargs='*', type=str, default=None,
                     help="Displays information about the specified jobs or job arrays")
 parser.add_argument("-m", dest="host_name", default=None,
@@ -175,20 +181,18 @@ connection = OpenLavaConnection(args)
 
 if len(args.job_ids) > 0:
     jobs = []
-    for job_id in args.job_ids:
+    for jid in args.job_ids:
         try:
-            jid = int(job_id)
+            jid = int(jid)
             aid = 0
         except ValueError:
-            match = re.search('\d+\[\d+\]', job_id)
-            if match:
-                jid = match.group(0)
-                aid = match.group(1)
-            else:
-                print "Invalid job id: %s" % job_id
+            jid = jid.rstrip("]")
+            jid, br, aid = jid.partition("[")
+            if not jid and aid:
+                print "Invalid job id: %s" % jid
                 sys.exit(1)
 
-        jobs.append(Job(connection, job_id=jid, array_id=aid))
+        jobs.append(Job(connection, job_id=jid, array_index=aid))
 else:
     jobs = Job.get_job_list(connection,
                             user_name=args.user_name,
@@ -196,13 +200,14 @@ else:
                             host_name=args.host_name,
                             queue_name=args.queue_name,
                             job_name=args.job_name,
-    )
-
-if args.long:
-    print_long()
-elif args.wide:
-    print_wide()
-else:
-    print_short()
-
-
+                            )
+try:
+    if args.long:
+        print_long()
+    elif args.wide:
+        print_wide()
+    else:
+        print_short()
+except RemoteServerError, e:
+    print "Unable to display job information: %s" % e.message
+    sys.exit(1)

@@ -1176,7 +1176,7 @@ class Host(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import Host
+            >>> from openlavacluster import Host
             >>> host=Host.get_host_list()[0]
             >>> Host.get_host_list()
             [master, comp00, comp01, comp02, comp03, comp04]
@@ -1234,7 +1234,7 @@ class Host(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import Host
+            >>> from openlavacluster import Host
             >>> host=Host.get_host_list()[0]
             >>> host.jobs()
             [9790]
@@ -1255,7 +1255,7 @@ class Host(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import Host
+            >>> from openlavacluster import Host
             >>> host=Host.get_host_list()[0]
             >>> host.close()
             Traceback (most recent call last):
@@ -1273,7 +1273,7 @@ class Host(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import Host
+            >>> from openlavacluster import Host
             >>> host=Host.get_host_list()[0]
             >>> host.open()
             Traceback (most recent call last):
@@ -1371,7 +1371,7 @@ class User(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import User
+            >>> from openlavacluster import User
             >>> user = User.get_queue_list()[0]
             >>> user.jobs()
             [9790]
@@ -1466,7 +1466,7 @@ class Queue(OpenLavaObject):
 
         Example::
 
-            >>> from cluster.openlavacluster import Queue
+            >>> from openlavacluster import Queue
             >>> queue = Queue.get_queue_list()[0]
             >>> queue.jobs()
             [9790]
@@ -3420,7 +3420,7 @@ class Job(OpenLavaObject):
 
             .. note::
 
-            Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
+                Openlava Only! This property is specific to Openlava and is not generic to all cluster interfaces.
 
         :return: None
         :raise: RemoteServerError on failure
@@ -3494,10 +3494,12 @@ class Job(OpenLavaObject):
         for k in kwargs.keys():
             if k not in allowed_keys:
                 raise ValueError("Argument: %s is not valid" % k)
-        data = json.dumps(kwargs)
+        data = json.dumps(kwargs, sort_keys=True, indent=4)
+
         url = connection.url + "/job/submit"
         request = urllib2.Request(url, data, {'Content-Type': 'application/json'})
         data = connection.open(request)
+
         if not isinstance(data, list):
             raise RemoteServerError("Server did not return a list: %s" % url)
         return [Job(connection, data=i) for i in data]
@@ -3509,7 +3511,8 @@ class Job(OpenLavaObject):
         Returns a list of jobs that match the specified criteria.
 
         :param connection:  Connection object to use to get data
-         :param job_id:
+
+        :param job_id:
             The numeric Job ID, if this is specified, then queue_name, host_name, user_name, and job_state are
             ignored.
 

@@ -17,7 +17,6 @@
 # along with olwclients. If not, see <http://www.gnu.org/licenses/>.
 import argparse
 from olwclient import *
-import os
 import getpass
 import re
 import sys
@@ -25,25 +24,25 @@ import sys
 parser = argparse.ArgumentParser(description='Displays information about hosts')
 OpenLavaConnection.configure_argument_list(parser)
 
-
-
-
-
-
-
 parser.add_argument("-J", dest="job_name", default=None,
-                    help="Operates only on jobs with the specified job_name. The -J option is ignored if a job ID other than 0 is specified in the job_ID option.")
+                    help="Operates only on jobs with the specified job_name. The -J option is ignored if a job ID \
+                    other than 0 is specified in the job_ID option.")
 parser.add_argument("-m", dest="host_name", default=None,
                     help="Operates only on jobs dispatched to the specified host or host group.")
 parser.add_argument("-q", dest="queue_name", default=None,
                     help="Operates only on jobs in the specified queue.")
 parser.add_argument("-u", dest="user_name", default=getpass.getuser(),
-                    help="Operates only on jobs submitted by the specified user or user group (see bugroup(1)), or by all users if the reserved user name all is specified.")
+                    help="Operates only on jobs submitted by the specified user or user group (see bugroup(1)), or by \
+                    all users if the reserved user name all is specified.")
 
 parser.add_argument("job_ids", nargs='+', type=str, default=None,
-                    help='Operates  only  on jobs that are specified by job_ID or "job_ID[index]", where "job_ID[index]" specifies selected job array elements (see bjobs(1)). For job arrays, quotation marks must enclose the job ID and index, and index must be enclosed in square brackets.')
+                    help='Operates  only  on jobs that are specified by job_ID or "job_ID[index]", where \
+                    "job_ID[index]" specifies selected job array elements (see bjobs(1)). For job arrays, quotation \
+                    marks must enclose the job ID and index, and index must be enclosed in square brackets.')
 
-parser.add_argument("-s", dest="signal", default="kill", choices=["kill", "suspend", "resume", "requeue"], help="Sends the specified signal to specified jobs. Signals can be one of: kill, suspend, resume, requeue," )
+parser.add_argument("-s", dest="signal", default="kill", choices=["kill", "suspend", "resume", "requeue"],
+                    help="Sends the specified signal to specified jobs. Signals can be one of: kill, suspend, resume, \
+                    requeue,")
 
 
 args = parser.parse_args()
@@ -56,7 +55,7 @@ if 0 in args.job_ids or "0" in args.job_ids:
                             host_name=args.host_name,
                             queue_name=args.queue_name,
                             job_name=args.job_name,
-    )
+                            )
 else:
     jobs = []
     for job_id in args.job_ids:
@@ -66,15 +65,21 @@ else:
         except ValueError:
             match = re.search('\d+\[\d+\]', job_id)
             if match:
-                jid=match.group(0)
-                aid=match.group(1)
+                jid = match.group(0)
+                aid = match.group(1)
             else:
                 print "Invalid job id: %s" % job_id
                 sys.exit(1)
 
-        jobs.append(Job(connection, job_id=jid, array_id=aid))
+        jobs.append(Job(connection, job_id=jid, array_index=aid))
 
-for job in jobs:
-    print "Sending %s signal to job: %s[%s]" % (args.signal, job.job_id, job.array_index)
-    getattr(job, args.signal)()
-
+try:
+    for job in jobs:
+        try:
+            print "Sending %s signal to job: %s[%s]" % (args.signal, job.job_id, job.array_index)
+            getattr(job, args.signal)()
+        except PermissionDeniedError, e:
+            print "Unable to perform action on job: %s[%s]: %s" % (job.job_id, job.array_index, e.message)
+except RemoteServerError, e:
+    print "Unable to display job information: %s" % e.message
+    sys.exit(1)
