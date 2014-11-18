@@ -26,8 +26,15 @@ def hclose(args):
         try:
             host.close()
             print "Olosed host: %s" % host.host_name
+        except PermissionDeniedError:
+            if connection.authenticated:
+                print "Unable to close host: Not Authorized."
+                sys.exit(1)
+            else:
+                raise
         except RemoteServerError as e:
             print "Unable to close host: %s: %s" % (host.host_name, e.message)
+            sys.exit(1)
 
 
 def hopen(args):
@@ -35,8 +42,15 @@ def hopen(args):
         try:
             host.open()
             print "Opened host: %s" % host.host_name
+        except PermissionDeniedError:
+            if connection.authenticated:
+                print "Unable to open host: Not Authorized."
+                sys.exit(1)
+            else:
+                raise
         except RemoteServerError as e:
             print "Unable to open host: %s: %s" % (host.host_name, e.message)
+            sys.exit(1)
 
 
 def qopen(args):
@@ -44,8 +58,15 @@ def qopen(args):
         try:
             queue.open()
             print "Opened queue: %s" % queue.name
+        except PermissionDeniedError:
+            if connection.authenticated:
+                print "Unable to open queue: Not Authorized."
+                sys.exit(1)
+            else:
+                raise
         except RemoteServerError as e:
             print "Unable to open queue: %s: %s" % (queue.name, e.message)
+            sys.exit(1)
 
 
 def qclose(args):
@@ -53,8 +74,15 @@ def qclose(args):
         try:
             queue.close()
             print "Closed queue: %s" % queue.name
+        except PermissionDeniedError:
+            if connection.authenticated:
+                print "Unable to close queue: Not Authorized."
+                sys.exit(1)
+            else:
+                raise
         except RemoteServerError as e:
             print "Unable to close queue: %s: %s" % (queue.name, e.message)
+            sys.exit(1)
 
 
 def qact(args):
@@ -62,18 +90,30 @@ def qact(args):
         try:
             queue.activate()
             print "Activated queue: %s" % queue.name
+        except PermissionDeniedError:
+            if connection.authenticated:
+                print "Unable to activate queue: Not Authorized."
+                sys.exit(1)
+            else:
+                raise
         except RemoteServerError as e:
             print "Unable to activate queue: %s: %s" % (queue.name, e.message)
-
+            sys.exit(1)
 
 def qinact(args):
     for queue in Queue.get_queues_by_names(connection, args.queue_names):
         try:
             queue.inactivate()
             print "Inactivated queue: %s" % queue.name
+        except PermissionDeniedError:
+            if connection.authenticated:
+                print "Unable to inactivate queue: Not Authorized."
+                sys.exit(1)
+            else:
+                raise
         except RemoteServerError as e:
             print "Unable to inactivate queue: %s: %s" % (queue.name, e.message)
-
+            sys.exit(1)
 
 parser = argparse.ArgumentParser(description='Badmin provides a set of commands to control and monitor Openlava.')
 OpenLavaConnection.configure_argument_list(parser)
@@ -117,8 +157,9 @@ pqact.set_defaults(func=qact)
 
 cmd_args = parser.parse_args()
 connection = OpenLavaConnection(cmd_args)
+
 try:
     cmd_args.func(cmd_args)
 except RemoteServerError, err:
-    print "Unable to display job information: %s" % err.message
+    print "Unable to perform action: %s" % err.message
     sys.exit(1)
