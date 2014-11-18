@@ -119,6 +119,6 @@ cmd_args = parser.parse_args()
 connection = OpenLavaConnection(cmd_args)
 try:
     cmd_args.func(cmd_args)
-except RemoteServerError, e:
-    print "Unable to display job information: %s" % e.message
+except RemoteServerError, err:
+    print "Unable to display job information: %s" % err.message
     sys.exit(1)
