@@ -25,7 +25,7 @@ setup(
     version="0.0.1",
     author="David Irvine",
     author_email="irvined@gmail.com.com",
-    description=("Client library for OpenlavaWeb API"),
+    description="Client library for OpenlavaWeb API",
     license="GPL v2",
     keywords="Openlava Web Clients",
     packages=['olwclient'],

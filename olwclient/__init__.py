@@ -242,13 +242,14 @@ class OpenLavaConnection(object):
 
         except urllib2.HTTPError as e:
             if e.code in [400, 401, 403, 404, 500]:
+                # noinspection PyBroadException
                 try:
                     exception_data = json.load(e)
                     exception_data = exception_data['data']
                     for sc in RemoteServerError.__subclasses__():
                         if sc.__name__ == exception_data['exception_class']:
                             raise sc(exception_data['message'])
-                    raise RemoteServerError("The operation failed: %s" % data['message'])
+                    raise RemoteServerError("The operation failed: %s" % exception_data['message'])
                 except Exception:
                     if e.code == 403 and self.authenticated:
                         raise PermissionDeniedError("Unknown authentication failure, check server logs")
@@ -1221,7 +1222,6 @@ class Host(OpenLavaObject):
         self.resources = [Resource(self._connection, data=res) for res in self.resources]
         self.statuses = [Status(self._connection, data=status) for status in self.statuses]
 
-
     def jobs(self, **kwargs):
         """
         Returns matching jobs on the host.  By default, returns all jobs that are executing on the host.
@@ -1558,7 +1558,6 @@ class ExecutionHost(Host):
             raise AttributeError
         else:
             Host.__init__(self, self._connection, host_name=self.name)
-            self._loaded_from_server
             if hasattr(self, name):
                 return getattr(self, name)
             else:
@@ -3291,7 +3290,6 @@ class Job(OpenLavaObject):
         """
         return self._queue['name']
 
-
     @property
     def submission_host(self):
         """
@@ -3371,7 +3369,7 @@ class Job(OpenLavaObject):
             if not isinstance(data, dict):
                 raise RemoteServerError("Expected a dict from: %s but got a: %s" % (url, type(data)))
             if data['type'] != "Job":
-                raise RemoteServerError("Expected a Job object but got a : %s" % (url, data['type']))
+                raise RemoteServerError("Expected a Job object but got a : %s from %s" % (data['type'], url))
 
         if not isinstance(data, dict):
                 raise ValueError("Data must be a dict")
